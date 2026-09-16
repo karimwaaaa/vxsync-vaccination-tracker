@@ -1,0 +1,32 @@
+<!--
+  VXSYNC FAVICON - paste-in instructions
+  ========================================
+  This is the ONE line to add to VxSync's Index.html so the browser tab
+  shows the new cloud+checkmark icon instead of a blank/default one.
+
+  1. Open your VxSync Apps Script project.
+  2. Open Index.html.
+  3. Find the <head> section (near the top, usually right after
+     <!DOCTYPE html> / <html> and your <meta charset...> line, before any
+     <style> or <link> tags for CSS).
+  4. Paste the single line below anywhere inside that <head> section.
+  5. Save, then Deploy > Manage deployments > Edit (pencil icon) > select
+     "New version" > Deploy, so the live URL picks up the change.
+
+  This works with ZERO external image hosting - the icon data is embedded
+  directly in the page (a "data:" URL), which is the only option for a
+  favicon in a pure Google Apps Script Web App since GAS can't serve an
+  uploaded image file the way Netlify does.
+
+  The <?!= faviconBase64 ?> below is a GAS template scriptlet, not literal
+  text to replace - it pulls the value that's already being set for you in
+  the updated VxSyncCode.gs's doGet() (see the line
+  "template.faviconBase64 = FAVICON_BASE64_PNG;"), so this one line just
+  references that variable rather than carrying the base64 data again.
+  IMPORTANT: this only works if Index.html is served through
+  HtmlService.createTemplateFromFile('Index').evaluate() (which it
+  already is) - a plain createHtmlOutputFromFile would not run the
+  scriptlet and would show the literal text instead of the icon.
+-->
+
+<link rel="icon" type="image/png" href="data:image/png;base64,<?!= faviconBase64 ?>" />

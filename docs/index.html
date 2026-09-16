@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VxSync Demo</title>
+<style>
+  :root {
+    --vx-navy: #16296b;
+    --vx-navy-dark: #0f1c4a;
+    --vx-teal: #1fb6a8;
+    --vx-green: #3ec97a;
+    --vx-bg: #f4f7fb;
+    --vx-card: #ffffff;
+    --vx-border: #e2e8f0;
+    --vx-text: #1e2a3a;
+    --vx-muted: #6b7a90;
+    --demo-banner-h: 40px;
+  }
+  * { box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--vx-bg);
+    color: var(--vx-text);
+    padding-top: calc(var(--demo-banner-h) + env(safe-area-inset-top, 0px));
+  }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+
+  /* ---- Demo banner: fixed, unmissable, never removable ---- */
+  .demo-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 5000;
+    background: repeating-linear-gradient(135deg, #7a1f0f, #7a1f0f 10px, #932615 10px, #932615 20px);
+    color: #fff;
+    font-size: 0.82em;
+    font-weight: 600;
+    text-align: center;
+    padding: calc(9px + env(safe-area-inset-top, 0px)) 14px 9px;
+    letter-spacing: 0.01em;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  .demo-banner strong { text-transform: uppercase; letter-spacing: 0.04em; margin-right: 6px; }
+
+  /* ---- Shared brand header (recreated from VxSync's real app shell) ---- */
+  .brand-header {
+    background: linear-gradient(90deg, var(--vx-navy) 0%, var(--vx-navy-dark) 100%);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .brand-header .vx-mark { display: flex; align-items: center; gap: 12px; }
+  .brand-header .vx-logo-dot {
+    width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--vx-teal), var(--vx-green));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4em; color: #fff; font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  }
+  .brand-header .vx-title { color: #fff; font-size: 1.5em; font-weight: 700; line-height: 1.1; }
+  .brand-header .vx-subtitle { color: #cdd8f0; font-size: 0.75em; font-weight: 400; }
+  .brand-header .pq-mark {
+    display: flex; align-items: center; gap: 8px;
+    background: #fff; padding: 4px 12px 4px 8px; border-radius: 20px;
+  }
+  .brand-header .pq-mark .pq-dot {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--vx-navy); flex-shrink: 0;
+  }
+  .brand-header .pq-mark span { font-size: 0.72em; color: var(--vx-navy); font-weight: 600; white-space: nowrap; }
+
+  .user-pill { font-size: 0.72em; color: var(--vx-muted); padding: 8px 24px 0 24px; text-align: right; }
+
+  /* ---- Tab switcher (same structure as the real app's Admin view) ---- */
+  .tab-bar {
+    display: flex; gap: 6px; background: #fff;
+    padding: 8px 24px 0 24px; border-bottom: 1px solid var(--vx-border);
+    position: sticky; top: calc(var(--demo-banner-h) + env(safe-area-inset-top, 0px)); z-index: 500;
+  }
+  .tab-btn {
+    border: none; background: transparent; padding: 10px 20px; font-weight: 600;
+    color: var(--vx-muted); cursor: pointer; border-bottom: 3px solid transparent; font-size: 0.95em;
+  }
+  .tab-btn.active { color: var(--vx-navy); border-bottom-color: var(--vx-teal); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ---- Entry Form (recreated from EntryForm.html) ---- */
+  #entryPanel .ef-container { max-width: 900px; margin: 20px auto; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  #entryPanel h2 { font-size: 1.05em; border-bottom: 1px solid var(--vx-border); padding-bottom: 8px; margin-top: 25px; color: var(--vx-navy); }
+  #entryPanel .form-row { display: flex; flex-wrap: wrap; margin-bottom: 12px; align-items: center; gap: 6px 0; }
+  #entryPanel .form-row label { width: 190px; font-weight: 600; color: #34495e; flex-shrink: 0; font-size: 0.92em; }
+  #entryPanel .form-row input, #entryPanel .form-row select, #entryPanel .form-row textarea {
+    flex: 1; padding: 8px 12px; border: 1px solid #dbe1ea; border-radius: 6px; font-size: 14px; min-width: 200px;
+  }
+  #entryPanel .form-row .readonly { background: #eef1f6; color: #2c3e50; }
+  #entryPanel .form-row select:disabled { background: #eef1f6 !important; color: #2c3e50; cursor: not-allowed; opacity: 0.85; }
+  #entryPanel .btn-row { margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap; }
+  #entryPanel .btn { padding: 12px 28px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.15s; color: #fff; }
+  #entryPanel .btn-success { background: var(--vx-green); }
+  #entryPanel .btn-success:hover { filter: brightness(0.92); }
+  #entryPanel .btn-warning { background: #f39c12; }
+  #entryPanel .btn-warning:hover { filter: brightness(0.92); }
+  #entryPanel .btn:disabled { opacity: 0.7; cursor: not-allowed; }
+  #entryPanel .msg { padding: 10px 14px; margin: 15px 0; border-radius: 6px; display: none; font-size: 0.92em; }
+  #entryPanel .msg-success { background: #d5f5e3; color: #1a7a4a; border: 1px solid #82e0aa; }
+  #entryPanel .msg-error { background: #fadbd8; color: #922b21; border: 1px solid #f1948a; }
+  #entryPanel .msg-saving { background: #eaf2fb; color: #1c4e80; border: 1px solid #a9cdf0; }
+  #entryPanel #ef-message {
+    position: fixed; top: calc(var(--demo-banner-h) + 14px + env(safe-area-inset-top,0px)); left: 50%;
+    transform: translateX(-50%); z-index: 2000; width: min(640px, calc(100vw - 28px));
+    margin: 0; box-shadow: 0 6px 20px rgba(0,0,0,0.2); font-weight: 600;
+  }
+  #entryPanel .field-group { background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+  #entryPanel .field-group.site-first { background: #fff7e6; border: 1px solid #f5d78e; }
+  #entryPanel .field-group.followup { background: #eaf6f4; }
+  #entryPanel .ef-helper { font-size: 0.8em; color: #6b7a90; margin: -6px 0 12px 0; }
+  #entryPanel .ef-typo-notice { display: none; margin: -4px 0 12px; padding: 8px 12px; border-radius: 6px; font-size: 0.85em; }
+  #entryPanel .ef-typo-info { background: #eaf6f4; color: #155e56; }
+  .global-search-inline { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 160px; }
+  .global-search-inline .search-icon { font-size: 0.8em; color: #7f8c8d; }
+  .global-search-inline input {
+    flex: 1; min-width: 80px; padding: 6px 8px; font-size: 0.8em; border: 1px solid #d5dbe3;
+    border-radius: 4px; background: #fafbfc; color: #2c3e50; transition: 0.15s;
+  }
+  .global-search-inline input:focus { border-color: #2980b9; background: #ffffff; outline: none; box-shadow: 0 0 0 2px rgba(41,128,185,0.12); }
+  @keyframes vx-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  #saveBtn .spinner { display: inline-block; animation: vx-spin 0.9s linear infinite; font-size: 1.1em; margin-right: 6px; }
+  @media (max-width: 700px) {
+    #entryPanel .form-row { flex-direction: column; align-items: stretch; }
+    #entryPanel .form-row label { width: auto; margin-bottom: 4px; }
+    .global-search-inline { min-width: unset; }
+  }
+
+  /* ---- Dashboard (recreated from Dashboard.html) ---- */
+  #dashboardPanel .db-container { max-width: 1400px; margin: 20px auto; padding: 0 20px 30px; }
+  #dashboardPanel .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 15px; margin: 20px 0; }
+  #dashboardPanel .stat-card { background: #fff; border-radius: 10px; padding: 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); text-align: center; border-top: 3px solid var(--vx-teal); }
+  #dashboardPanel .stat-card .number { font-size: 2.1em; font-weight: 700; color: var(--vx-navy); }
+  #dashboardPanel .stat-card .label { font-size: 0.85em; color: var(--vx-muted); margin-top: 4px; }
+  #dashboardPanel .stat-card.overdue { border-top-color: #e74c3c; } .stat-card.overdue .number { color: #e74c3c; }
+  #dashboardPanel .stat-card.due7 { border-top-color: #f39c12; } .stat-card.due7 .number { color: #f39c12; }
+  #dashboardPanel .stat-card.due30 { border-top-color: #2980b9; } .stat-card.due30 .number { color: #2980b9; }
+  #dashboardPanel .stat-card.future { border-top-color: var(--vx-green); } .stat-card.future .number { color: var(--vx-green); }
+  #dashboardPanel .section { background: #fff; border-radius: 10px; padding: 20px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+  #dashboardPanel .section h2 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 8px; color: var(--vx-navy); font-size: 1.05em; }
+  #dashboardPanel table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  #dashboardPanel th { background: #f0f4f9; text-align: left; padding: 10px 8px; color: var(--vx-navy); }
+  #dashboardPanel td { padding: 8px; border-bottom: 1px solid #eee; }
+  #dashboardPanel .status-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  #dashboardPanel .badge-overdue { background: #fadbd8; color: #922b21; }
+  #dashboardPanel .badge-due { background: #fdebd0; color: #935e38; }
+  #dashboardPanel .badge-future { background: #d5f5e3; color: #1a7a4a; }
+  #dashboardPanel .badge-action { background: #ebf5fb; color: #1b4f72; }
+  #dashboardPanel .scroll { overflow-x: auto; }
+  #dashboardPanel .empty-row td { text-align: center; color: var(--vx-muted); padding: 18px; }
+  #dashboardPanel .db-toolbar { display: flex; justify-content: flex-end; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+  #dashboardPanel .refresh-btn { border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.85em; cursor: pointer; color: #fff; background: var(--vx-teal); }
+  #dashboardPanel .export-btn { border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.85em; cursor: pointer; color: #fff; background: var(--vx-navy); }
+  #dashboardPanel .db-msg { padding: 10px 14px; border-radius: 6px; background: #eaf6f4; color: #155e56; display: none; margin-bottom: 15px; font-size: 0.88em; }
+  #dashboardPanel .db-msg.show { display: block; }
+  .chart-wrap { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .bar-chart { flex: 1 1 320px; min-width: 260px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bar-row .bar-label { width: 130px; font-size: 0.82em; color: #34495e; flex-shrink: 0; }
+  .bar-row .bar-track { flex: 1; background: #eef1f6; border-radius: 5px; height: 16px; overflow: hidden; }
+  .bar-row .bar-fill { height: 100%; border-radius: 5px 0 0 5px; }
+  .bar-row .bar-value { width: 34px; text-align: right; font-size: 0.82em; font-weight: 700; color: var(--vx-navy); flex-shrink: 0; }
+  .donut-wrap { flex: 0 0 240px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .donut-legend { font-size: 0.78em; color: #34495e; display: flex; flex-direction: column; gap: 4px; align-self: stretch; }
+  .donut-legend .li { display: flex; align-items: center; gap: 6px; }
+  .donut-legend .sw { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ---- Fake modal for the disabled PDF export ---- */
+  .fake-modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(15,28,74,0.45);
+    z-index: 4000; align-items: center; justify-content: center; padding: 20px;
+  }
+  .fake-modal-overlay.open { display: flex; }
+  .fake-modal {
+    background: #fff; border-radius: 10px; max-width: 420px; width: 100%;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.25); padding: 24px 26px; text-align: center;
+  }
+  .fake-modal h3 { margin: 0 0 10px; color: var(--vx-navy); }
+  .fake-modal p { font-size: 0.9em; color: var(--vx-muted); line-height: 1.5; }
+  .fake-modal button {
+    margin-top: 14px; border: none; background: var(--vx-navy); color: #fff;
+    padding: 9px 22px; border-radius: 6px; font-weight: 600; cursor: pointer;
+  }
+
+  footer.demo-footer { text-align: center; color: var(--vx-muted); font-size: 0.78em; padding: 24px 16px 40px; }
+</style>
+</head>
+<body>
+
+  <div class="demo-banner"><strong>Demo</strong>Interactive demo &mdash; sample data only. Not connected to any live system.</div>
+
+  <div class="brand-header">
+    <div class="vx-mark">
+      <div class="vx-logo-dot">Vx</div>
+      <div>
+        <div class="vx-title">VxSync</div>
+        <div class="vx-subtitle">Vaccination Tracking System</div>
+      </div>
+    </div>
+    <div class="pq-mark">
+      <div class="pq-dot"></div>
+      <span>Powered by Meridian Health Logistics</span>
+    </div>
+  </div>
+
+  <div class="user-pill">demo.viewer@example.com &middot; Admin (demo)</div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tabBtnEntry" onclick="vxShowTab('entry')">&#128221; Vaccination Entry</button>
+    <button class="tab-btn" id="tabBtnDashboard" onclick="vxShowTab('dashboard')">&#128202; Program Dashboard</button>
+  </div>
+
+  <!-- ============================================================
+       ENTRY FORM PANEL
+       ============================================================ -->
+  <div id="entryPanel" class="tab-panel active">
+    <div class="ef-container">
+      <div id="ef-message" class="msg"></div>
+
+      <form id="entryForm" onsubmit="return false;">
+
+        <h2>SITE OF VACCINATION</h2>
+        <div class="field-group site-first">
+          <div class="form-row">
+            <label for="location">Site of Vaccination *</label>
+            <select id="location" onchange="efSiteChanged()">
+              <option value="">-- Select Site --</option>
+              <option value="Meridian Clinic - Riverside">Meridian Clinic - Riverside</option>
+              <option value="Meridian Clinic - Lakeview">Meridian Clinic - Lakeview</option>
+              <option value="Meridian Mobile Unit - Fairhaven">Meridian Mobile Unit - Fairhaven</option>
+              <option value="Meridian Clinic - Brookstone">Meridian Clinic - Brookstone</option>
+            </select>
+          </div>
+          <div class="ef-helper">Sample sites shown for demo purposes only.</div>
+        </div>
+
+        <h2>RECIPIENT INFORMATION</h2>
+        <div class="field-group">
+          <div class="form-row" style="flex-wrap: wrap; gap: 6px 0;">
+            <label for="recipientSelect" style="width:auto; min-width:140px;">Recipient Name *</label>
+            <select id="recipientSelect" style="flex:2 1 180px; min-width:120px;" onchange="efRecipientChanged()">
+              <option value="">-- Select Recipient --</option>
+            </select>
+            <div class="global-search-inline">
+              <span class="search-icon">&#128269;</span>
+              <input type="text" id="recipientSearch" placeholder="Search all sites..." oninput="efRenderRecipientOptions()">
+            </div>
+          </div>
+          <div id="recipientLookupIndicator" class="ef-typo-info ef-typo-notice" style="display:none;">&#128260; Looking up recipient&hellip;</div>
+
+          <div class="form-row"><label>Recipient ID</label><input type="text" id="recipientId" readonly class="readonly"></div>
+          <div class="form-row"><label>Email Address</label><input type="text" id="email" readonly class="readonly"></div>
+          <div class="form-row"><label>Date of Birth</label><input type="text" id="dob" readonly class="readonly"></div>
+          <div class="form-row"><label>Company / Organization</label><input type="text" id="company" readonly class="readonly"></div>
+        </div>
+
+        <h2>DOSE ASSESSMENT &amp; DISPOSITION</h2>
+        <div class="field-group">
+          <div class="form-row">
+            <label for="vaccineType">Vaccine Type *</label>
+            <select id="vaccineType" onchange="efVaccineTypeChanged()">
+              <option value="">-- Select Vaccine --</option>
+            </select>
+          </div>
+          <div id="doseHistoryLookupIndicator" class="ef-typo-info ef-typo-notice" style="display:none;">&#128260; Checking this recipient's vaccination history for this vaccine&hellip;</div>
+          <div id="doseHistoryHint" style="display:none; margin:-4px 0 12px; padding:8px 12px; border-radius:6px; background:#eaf6f4; color:#155e56; font-size:0.85em;"></div>
+          <div class="form-row">
+            <label for="intendedDose">Intended Dose Number *</label>
+            <select id="intendedDose"><option value="">-- Select Vaccine First --</option></select>
+          </div>
+          <div class="form-row">
+            <label for="doseDisposition">Dose Disposition *</label>
+            <select id="doseDisposition">
+              <option value="">-- Select --</option>
+              <option value="Administered">Administered</option>
+              <option value="Deferred">Deferred</option>
+              <option value="Declined">Declined</option>
+              <option value="No-show">No-show</option>
+            </select>
+          </div>
+          <div class="form-row"><label for="statusDate">Status Date</label><input type="date" id="statusDate"></div>
+        </div>
+
+        <h2>VACCINATION DETAILS</h2>
+        <div class="field-group">
+          <div class="form-row">
+            <label for="vaccineBrand">Vaccine Brand *</label>
+            <select id="vaccineBrand" onchange="efBrandChanged()"><option value="">-- Select Vaccine First --</option></select>
+          </div>
+          <div class="form-row">
+            <label for="schedule">Schedule *</label>
+            <select id="schedule"><option value="">-- Select Brand First --</option></select>
+          </div>
+          <div class="form-row"><label for="lotNumber">Lot Number</label><input type="text" id="lotNumber" placeholder="e.g. LOT-2026-0143"></div>
+          <div class="form-row"><label>Site of Vaccination</label><input type="text" id="locationEcho" readonly class="readonly"></div>
+        </div>
+
+        <h2>FOLLOW-UP &amp; SCHEDULE (updates live as you fill out the form above)</h2>
+        <div class="field-group followup">
+          <div class="form-row"><label>Next Dose</label><input type="text" id="nextDose" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
+          <div class="form-row"><label>Recommended Next Dose Date</label><input type="text" id="recommendedDate" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
+          <div class="form-row"><label>Series Status</label><input type="text" id="seriesStatus" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
+        </div>
+
+        <div class="btn-row">
+          <button type="button" class="btn btn-success" id="saveBtn" onclick="efSubmit()">&#128190; Save Record</button>
+          <button type="button" class="btn btn-warning" onclick="efClear()">&#128465; Clear Form</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       DASHBOARD PANEL
+       ============================================================ -->
+  <div id="dashboardPanel" class="tab-panel">
+    <div class="db-container">
+      <div id="db-message" class="db-msg">Sample data refreshed. (Demo mode &mdash; numbers do not change on refresh.)</div>
+      <div class="db-toolbar">
+        <button class="refresh-btn" onclick="vxRefreshClicked()">&#128260; Refresh</button>
+        <button class="export-btn" onclick="vxOpenPdfModal()">&#128196; Export PDF</button>
+      </div>
+      <h1 style="color:var(--vx-navy); font-size:1.3em; margin:8px 0 0;">Program Monitoring &amp; Dose Follow-Up Summary</h1>
+
+      <div id="stats" class="stats-grid"></div>
+      <div id="stats2" class="stats-grid"></div>
+
+      <div class="section">
+        <h2>&#128276; Action Required</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Recipient</th><th>Site of Vaccination</th><th>Vaccine</th><th>Dose</th><th>Disposition</th><th>Review Date</th><th>Action</th></tr></thead>
+            <tbody id="actionTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>&#128197; Upcoming Doses / Appointments</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Recipient</th><th>Site of Vaccination</th><th>Vaccine</th><th>Next Dose</th><th>Recommended Date</th><th>Status</th></tr></thead>
+            <tbody id="upcomingTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>&#128202; Follow-Up Buckets by Urgency</h2>
+        <div class="chart-wrap">
+          <div class="bar-chart" id="urgencyBars"></div>
+          <div class="donut-wrap">
+            <svg id="vaccineDonut" width="180" height="180" viewBox="0 0 180 180"></svg>
+            <div class="donut-legend" id="donutLegend"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fake-modal-overlay" id="pdfModalOverlay">
+    <div class="fake-modal">
+      <h3>&#128196; Export Program Report (PDF)</h3>
+      <p>PDF export is disabled in this demo &mdash; in the live app this button builds a branded PDF (executive summary, charts, and detailed tables) from your organization's real vaccination data.</p>
+      <button type="button" onclick="vxClosePdfModal()">Close</button>
+    </div>
+  </div>
+
+  <footer class="demo-footer">VxSync interactive demo &middot; sample data only &middot; no live backend</footer>
+
+<script>
+  // ============================================================
+  // FAKE DATA — everything below is invented for this portfolio
+  // demo. No real names, sites, emails, or IDs.
+  // ============================================================
+  var DEMO_SITES = [
+    'Meridian Clinic - Riverside',
+    'Meridian Clinic - Lakeview',
+    'Meridian Mobile Unit - Fairhaven',
+    'Meridian Clinic - Brookstone'
+  ];
+
+  var DEMO_RECIPIENTS = [
+    { id: 'VAC-000112', name: 'Priya Chandrasekaran', site: 'Meridian Clinic - Riverside', dob: '1988-03-14', email: 'priya.c@demo-example.com', company: 'Northfield Distribution Co.' },
+    { id: 'VAC-000113', name: 'Marcus Delgado', site: 'Meridian Clinic - Lakeview', dob: '1979-11-02', email: 'marcus.d@demo-example.com', company: 'Northfield Distribution Co.' },
+    { id: 'VAC-000114', name: 'Wendy Okafor', site: 'Meridian Mobile Unit - Fairhaven', dob: '1995-07-21', email: 'wendy.o@demo-example.com', company: 'Harborview Logistics' },
+    { id: 'VAC-000115', name: 'Tobias Lindqvist', site: 'Meridian Clinic - Brookstone', dob: '1983-01-09', email: 'tobias.l@demo-example.com', company: 'Harborview Logistics' },
+    { id: 'VAC-000116', name: 'Ana Beatriz Ferreira', site: 'Meridian Clinic - Riverside', dob: '1991-05-30', email: 'ana.f@demo-example.com', company: 'Northfield Distribution Co.' },
+    { id: 'VAC-000117', name: 'Devon Marsh', site: 'Meridian Clinic - Lakeview', dob: '1976-09-17', email: 'devon.m@demo-example.com', company: 'Crestline Warehousing' },
+    { id: 'VAC-000118', name: 'Kiona Redcloud', site: 'Meridian Mobile Unit - Fairhaven', dob: '1999-02-25', email: 'kiona.r@demo-example.com', company: 'Crestline Warehousing' },
+    { id: 'VAC-000119', name: 'Samuel Osei', site: 'Meridian Clinic - Brookstone', dob: '1985-12-05', email: 'samuel.o@demo-example.com', company: 'Harborview Logistics' },
+    { id: 'VAC-000120', name: 'Lena Vogt', site: 'Meridian Clinic - Riverside', dob: '1993-06-11', email: 'lena.v@demo-example.com', company: 'Northfield Distribution Co.' },
+    { id: 'VAC-000121', name: 'Ravi Bhattacharya', site: 'Meridian Clinic - Lakeview', dob: '1980-08-19', email: 'ravi.b@demo-example.com', company: 'Crestline Warehousing' },
+    { id: 'VAC-000122', name: 'Charlotte Nguyen-Baptiste', site: 'Meridian Mobile Unit - Fairhaven', dob: '1997-04-03', email: 'charlotte.nb@demo-example.com', company: 'Harborview Logistics' },
+    { id: 'VAC-000123', name: 'Femi Adisa', site: 'Meridian Clinic - Brookstone', dob: '1990-10-28', email: 'femi.a@demo-example.com', company: 'Northfield Distribution Co.' }
+  ];
+
+  // vaccine type -> brands -> schedules -> dose count
+  var DEMO_VACCINES = {
+    'Hepatitis B': {
+      brands: {
+        'Engerix-B': { schedules: { '3-Dose Series (0, 1, 6 mo.)': 3 } },
+        'Recombivax HB': { schedules: { '3-Dose Series (0, 1, 6 mo.)': 3 } }
+      }
+    },
+    'Influenza': {
+      brands: {
+        'Fluarix Quadrivalent': { schedules: { 'Annual Single Dose': 1 } },
+        'Flulaval Quadrivalent': { schedules: { 'Annual Single Dose': 1 } }
+      }
+    },
+    'Tetanus-Diphtheria-Pertussis (Tdap)': {
+      brands: {
+        'Adacel': { schedules: { 'Single Booster (every 10 yrs)': 1 } },
+        'Boostrix': { schedules: { 'Single Booster (every 10 yrs)': 1 } }
+      }
+    },
+    'MMR (Measles, Mumps, Rubella)': {
+      brands: {
+        'M-M-R II': { schedules: { '2-Dose Series (0, 4 wk.)': 2 } },
+        'Priorix': { schedules: { '2-Dose Series (0, 4 wk.)': 2 } }
+      }
+    },
+    'Typhoid': {
+      brands: {
+        'Typhim Vi': { schedules: { 'Single Dose (booster q2yr)': 1 } }
+      }
+    },
+    'COVID-19': {
+      brands: {
+        'Comirnaty': { schedules: { 'Primary Series (2-dose)': 2, 'Booster (single dose)': 1 } },
+        'Spikevax': { schedules: { 'Primary Series (2-dose)': 2, 'Booster (single dose)': 1 } }
+      }
+    }
+  };
+
+  var efGen = 0;
+  var efSelectedRecipient = null;
+
+  function efPad(n) { return String(n).padStart(2, '0'); }
+  function efLocalDateStr(d) { return d.getFullYear() + '-' + efPad(d.getMonth() + 1) + '-' + efPad(d.getDate()); }
+
+  function efShowMessage(text, type) {
+    var el = document.getElementById('ef-message');
+    el.textContent = text;
+    el.className = 'msg msg-' + type;
+    el.style.display = 'block';
+  }
+  function efHideMessage() { document.getElementById('ef-message').style.display = 'none'; }
+
+  (function efInit() {
+    var siteSelect = document.getElementById('location');
+    var vaccineSelect = document.getElementById('vaccineType');
+    vaccineSelect.innerHTML = '<option value="">-- Select Vaccine --</option>';
+    Object.keys(DEMO_VACCINES).forEach(function (v) {
+      var opt = document.createElement('option');
+      opt.value = v; opt.text = v;
+      vaccineSelect.appendChild(opt);
+    });
+    var now = new Date();
+    document.getElementById('statusDate').value = efLocalDateStr(now);
+    efRenderRecipientOptions();
+    efShowMessage('Demo data loaded.', 'success');
+    setTimeout(efHideMessage, 1800);
+  })();
+
+  function efSiteChanged() {
+    document.getElementById('locationEcho').value = document.getElementById('location').value;
+    efRenderRecipientOptions();
+  }
+
+  function efRenderRecipientOptions() {
+    var select = document.getElementById('recipientSelect');
+    var searchText = document.getElementById('recipientSearch').value.trim().toLowerCase();
+    var site = document.getElementById('location').value;
+    var previousValue = select.value;
+    var filtered;
+    if (searchText) {
+      filtered = DEMO_RECIPIENTS.filter(function (r) { return r.name.toLowerCase().indexOf(searchText) !== -1; });
+    } else if (site) {
+      filtered = DEMO_RECIPIENTS.filter(function (r) { return r.site === site; });
+    } else {
+      filtered = DEMO_RECIPIENTS;
+    }
+    select.innerHTML = '<option value="">-- Select Recipient --</option>';
+    filtered.forEach(function (r) {
+      var opt = document.createElement('option');
+      opt.value = r.id;
+      opt.text = r.name + ' (' + r.site.replace('Meridian ', '') + ')';
+      select.appendChild(opt);
+    });
+    if (previousValue && filtered.some(function (r) { return r.id === previousValue; })) {
+      select.value = previousValue;
+    }
+  }
+
+  document.getElementById('recipientSearch').addEventListener('input', efRenderRecipientOptions);
+
+  // Fake async "recipient lookup" flourish — cosmetic only, mirrors the
+  // real app's generation-guarded google.script.run round trip.
+  function efRecipientChanged() {
+    var id = document.getElementById('recipientSelect').value;
+    var gen = ++efGen;
+    if (!id) { efClearRecipientFields(); return; }
+    var indicator = document.getElementById('recipientLookupIndicator');
+    var select = document.getElementById('recipientSelect');
+    select.disabled = true;
+    indicator.style.display = 'block';
+    setTimeout(function () {
+      if (gen !== efGen) return; // a newer selection superseded this one
+      select.disabled = false;
+      indicator.style.display = 'none';
+      var r = DEMO_RECIPIENTS.filter(function (x) { return x.id === id; })[0];
+      if (!r) { efClearRecipientFields(); return; }
+      efSelectedRecipient = r;
+      document.getElementById('recipientId').value = r.id;
+      document.getElementById('email').value = r.email;
+      document.getElementById('dob').value = r.dob;
+      document.getElementById('company').value = r.company;
+    }, 550 + Math.random() * 400);
+  }
+
+  function efClearRecipientFields() {
+    ['recipientId', 'email', 'dob', 'company'].forEach(function (id) { document.getElementById(id).value = ''; });
+    efSelectedRecipient = null;
+  }
+
+  function efVaccineTypeChanged() {
+    var type = document.getElementById('vaccineType').value;
+    var gen = ++efGen;
+    efResetDependentFields();
+    var brandSelect = document.getElementById('vaccineBrand');
+    if (!type) { brandSelect.innerHTML = '<option value="">-- Select Vaccine First --</option>'; return; }
+
+    if (efSelectedRecipient) {
+      var indicator = document.getElementById('doseHistoryLookupIndicator');
+      indicator.style.display = 'block';
+      setTimeout(function () {
+        if (gen !== efGen) return;
+        indicator.style.display = 'none';
+        var hint = document.getElementById('doseHistoryHint');
+        hint.style.display = 'block';
+        hint.textContent = 'No prior ' + type + ' doses on file for ' + efSelectedRecipient.name.split(' ')[0] + ' — this will be recorded as Dose 1.';
+      }, 500 + Math.random() * 350);
+    }
+
+    brandSelect.innerHTML = '<option value="">-- Select Brand --</option>';
+    Object.keys(DEMO_VACCINES[type].brands).forEach(function (b) {
+      var opt = document.createElement('option');
+      opt.value = b; opt.text = b;
+      brandSelect.appendChild(opt);
+    });
+  }
+
+  function efResetDependentFields() {
+    document.getElementById('doseHistoryHint').style.display = 'none';
+    document.getElementById('doseHistoryHint').textContent = '';
+    document.getElementById('doseHistoryLookupIndicator').style.display = 'none';
+    document.getElementById('schedule').innerHTML = '<option value="">-- Select Brand First --</option>';
+    document.getElementById('intendedDose').innerHTML = '<option value="">-- Select Vaccine First --</option>';
+    efUpdateFollowUp();
+  }
+
+  function efBrandChanged() {
+    var type = document.getElementById('vaccineType').value;
+    var brand = document.getElementById('vaccineBrand').value;
+    var scheduleSelect = document.getElementById('schedule');
+    scheduleSelect.innerHTML = '<option value="">-- Select Schedule --</option>';
+    if (!type || !brand) return;
+    Object.keys(DEMO_VACCINES[type].brands[brand].schedules).forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = s; opt.text = s;
+      scheduleSelect.appendChild(opt);
+    });
+    scheduleSelect.onchange = efScheduleChanged;
+  }
+
+  function efScheduleChanged() {
+    var type = document.getElementById('vaccineType').value;
+    var brand = document.getElementById('vaccineBrand').value;
+    var schedule = document.getElementById('schedule').value;
+    var doseSelect = document.getElementById('intendedDose');
+    doseSelect.innerHTML = '<option value="">-- Select Dose --</option>';
+    if (!type || !brand || !schedule) { efUpdateFollowUp(); return; }
+    var doseCount = DEMO_VACCINES[type].brands[brand].schedules[schedule];
+    for (var i = 1; i <= doseCount; i++) {
+      var opt = document.createElement('option');
+      opt.value = i;
+      opt.text = (i === doseCount && doseCount > 1) ? i + ' (Final Dose)' : 'Dose ' + i;
+      doseSelect.appendChild(opt);
+    }
+    doseSelect.onchange = efUpdateFollowUp;
+    efUpdateFollowUp();
+  }
+
+  function efUpdateFollowUp() {
+    var type = document.getElementById('vaccineType').value;
+    var doseSelect = document.getElementById('intendedDose');
+    var dose = doseSelect.value;
+    var doseCount = doseSelect.options.length ? doseSelect.options.length - 1 : 0;
+    var next = document.getElementById('nextDose');
+    var recDate = document.getElementById('recommendedDate');
+    var status = document.getElementById('seriesStatus');
+    if (!type || !dose) {
+      next.value = '(fill in dose assessment & schedule above)';
+      recDate.value = '(fill in dose assessment & schedule above)';
+      status.value = '(fill in dose assessment & schedule above)';
+      return;
+    }
+    var doseNum = parseInt(dose, 10);
+    if (doseNum >= doseCount) {
+      next.value = 'None — series complete';
+      recDate.value = '—';
+      status.value = 'Completed';
+    } else {
+      var d = new Date();
+      d.setDate(d.getDate() + 28);
+      next.value = 'Dose ' + (doseNum + 1);
+      recDate.value = efLocalDateStr(d);
+      status.value = 'In Progress';
+    }
+  }
+
+  function efSubmit() {
+    var required = ['location', 'recipientSelect', 'vaccineType', 'intendedDose', 'doseDisposition', 'vaccineBrand', 'schedule'];
+    var missing = required.filter(function (id) { return !document.getElementById(id).value; });
+    if (missing.length) {
+      efShowMessage('Please complete all required fields before saving.', 'error');
+      return;
+    }
+    var btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner">&#9696;</span> Saving…';
+    efShowMessage('Saving record…', 'saving');
+    setTimeout(function () {
+      btn.disabled = false;
+      btn.innerHTML = '&#128190; Save Record';
+      efShowMessage('✓ Record saved (demo only — nothing was actually written anywhere).', 'success');
+    }, 900);
+  }
+
+  function efClear() {
+    document.getElementById('entryForm').reset();
+    document.getElementById('locationEcho').value = '';
+    efClearRecipientFields();
+    document.getElementById('vaccineBrand').innerHTML = '<option value="">-- Select Vaccine First --</option>';
+    efResetDependentFields();
+    efRenderRecipientOptions();
+    efHideMessage();
+  }
+
+  // ============================================================
+  // TAB SWITCHING
+  // ============================================================
+  var vxDashboardLoaded = false;
+  function vxShowTab(which) {
+    var entry = document.getElementById('entryPanel');
+    var dash = document.getElementById('dashboardPanel');
+    var btnEntry = document.getElementById('tabBtnEntry');
+    var btnDash = document.getElementById('tabBtnDashboard');
+    if (which === 'entry') {
+      entry.classList.add('active'); dash.classList.remove('active');
+      btnEntry.classList.add('active'); btnDash.classList.remove('active');
+    } else {
+      dash.classList.add('active'); entry.classList.remove('active');
+      btnDash.classList.add('active'); btnEntry.classList.remove('active');
+      if (!vxDashboardLoaded) { vxDashboardLoaded = true; vxLoadDashboard(); }
+    }
+  }
+
+  // ============================================================
+  // DASHBOARD — fake stats, buckets, tables, simple SVG donut
+  // ============================================================
+  var DEMO_STATS = {
+    activeRecipients: 214, vaccinatedRecipients: 187, dosesAdministered: 412,
+    nextDosesDue: 46, seriesCompleted: 121, actionRequired: 9,
+    overdue: 6, due7: 11, due30: 22, due90: 18, future: 34
+  };
+
+  var DEMO_ACTION_ROWS = [
+    { name: 'Ana Beatriz Ferreira', site: 'Meridian Clinic - Riverside', vaccine: 'Hepatitis B', dose: '2', disposition: 'No-show', review: '2026-08-30' },
+    { name: 'Devon Marsh', site: 'Meridian Clinic - Lakeview', vaccine: 'MMR (Measles, Mumps, Rubella)', dose: '1', disposition: 'Deferred', review: '2026-09-02' },
+    { name: 'Kiona Redcloud', site: 'Meridian Mobile Unit - Fairhaven', vaccine: 'Tdap', dose: '1', disposition: 'Declined', review: '2026-09-05' }
+  ];
+
+  var DEMO_UPCOMING_ROWS = [
+    { name: 'Priya Chandrasekaran', site: 'Meridian Clinic - Riverside', vaccine: 'Hepatitis B', nextDose: 'Dose 2', date: '2026-09-18', status: 'DUE ≤7 DAYS' },
+    { name: 'Ravi Bhattacharya', site: 'Meridian Clinic - Lakeview', vaccine: 'COVID-19', nextDose: 'Booster', date: '2026-10-01', status: 'DUE 8–30 DAYS' },
+    { name: 'Femi Adisa', site: 'Meridian Clinic - Brookstone', vaccine: 'Influenza', nextDose: 'Annual Dose', date: '2026-09-10', status: 'OVERDUE' },
+    { name: 'Charlotte Nguyen-Baptiste', site: 'Meridian Mobile Unit - Fairhaven', vaccine: 'Typhoid', nextDose: 'Booster', date: '2026-12-02', status: 'FUTURE' }
+  ];
+
+  var DEMO_VACCINE_MIX = [
+    { label: 'Hepatitis B', value: 118, color: '#16296b' },
+    { label: 'Influenza', value: 96, color: '#1fb6a8' },
+    { label: 'COVID-19', value: 84, color: '#3ec97a' },
+    { label: 'Tdap', value: 62, color: '#f39c12' },
+    { label: 'MMR', value: 34, color: '#8e44ad' },
+    { label: 'Typhoid', value: 18, color: '#2980b9' }
+  ];
+
+  function vxStatCard(value, label, cls) {
+    return '<div class="stat-card ' + (cls || '') + '"><div class="number">' + value + '</div><div class="label">' + label + '</div></div>';
+  }
+
+  function vxEsc(v) {
+    if (v === null || v === undefined || v === '') return '—';
+    return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function vxLoadDashboard() {
+    var s = DEMO_STATS;
+    document.getElementById('stats').innerHTML =
+      vxStatCard(s.activeRecipients, 'Active Recipients') +
+      vxStatCard(s.vaccinatedRecipients, 'Vaccinated Recipients') +
+      vxStatCard(s.dosesAdministered, 'Doses Administered (This Month)') +
+      vxStatCard(s.nextDosesDue, 'Next Doses Due') +
+      vxStatCard(s.seriesCompleted, 'Series Completed') +
+      vxStatCard(s.actionRequired, 'Action Required');
+    document.getElementById('stats2').innerHTML =
+      vxStatCard(s.overdue, 'Overdue', 'overdue') +
+      vxStatCard(s.due7, 'Due ≤7 Days', 'due7') +
+      vxStatCard(s.due30, 'Due 8–30 Days', 'due30') +
+      vxStatCard(s.due90, 'Due 31–90 Days', 'due30') +
+      vxStatCard(s.future, 'Future', 'future');
+
+    document.getElementById('actionTable').innerHTML = DEMO_ACTION_ROWS.map(function (r) {
+      return '<tr><td>' + vxEsc(r.name) + '</td><td>' + vxEsc(r.site) + '</td><td>' + vxEsc(r.vaccine) +
+        '</td><td>' + vxEsc(r.dose) + '</td><td>' + vxEsc(r.disposition) + '</td><td>' + vxEsc(r.review) +
+        '</td><td><span class="status-badge badge-action">Follow up</span></td></tr>';
+    }).join('');
+
+    document.getElementById('upcomingTable').innerHTML = DEMO_UPCOMING_ROWS.map(function (r) {
+      var cls = r.status === 'OVERDUE' ? 'badge-overdue' : (r.status.indexOf('DUE') === 0 ? 'badge-due' : 'badge-future');
+      return '<tr><td>' + vxEsc(r.name) + '</td><td>' + vxEsc(r.site) + '</td><td>' + vxEsc(r.vaccine) +
+        '</td><td>' + vxEsc(r.nextDose) + '</td><td>' + vxEsc(r.date) +
+        '</td><td><span class="status-badge ' + cls + '">' + vxEsc(r.status) + '</span></td></tr>';
+    }).join('');
+
+    vxRenderUrgencyBars();
+    vxRenderDonut();
+
+    var msg = document.getElementById('db-message');
+    msg.classList.add('show');
+    setTimeout(function () { msg.classList.remove('show'); }, 2200);
+  }
+
+  function vxRefreshClicked() { vxLoadDashboard(); }
+
+  function vxRenderUrgencyBars() {
+    var buckets = [
+      { label: 'Overdue', value: DEMO_STATS.overdue, color: '#e74c3c' },
+      { label: 'Due ≤7 Days', value: DEMO_STATS.due7, color: '#f39c12' },
+      { label: 'Due 8–30 Days', value: DEMO_STATS.due30, color: '#2980b9' },
+      { label: 'Due 31–90 Days', value: DEMO_STATS.due90, color: '#2980b9' },
+      { label: 'Future', value: DEMO_STATS.future, color: '#3ec97a' }
+    ];
+    var max = Math.max.apply(null, buckets.map(function (b) { return b.value; }));
+    var html = buckets.map(function (b) {
+      var pct = max ? Math.round((b.value / max) * 100) : 0;
+      return '<div class="bar-row"><div class="bar-label">' + b.label + '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%; background:' + b.color + ';"></div></div>' +
+        '<div class="bar-value">' + b.value + '</div></div>';
+    }).join('');
+    document.getElementById('urgencyBars').innerHTML = html;
+  }
+
+  function vxRenderDonut() {
+    var total = DEMO_VACCINE_MIX.reduce(function (a, b) { return a + b.value; }, 0);
+    var cx = 90, cy = 90, r = 70, innerR = 42;
+    var angle = -90;
+    var svg = document.getElementById('vaccineDonut');
+    var parts = '';
+    DEMO_VACCINE_MIX.forEach(function (d) {
+      var frac = d.value / total;
+      var sweep = frac * 360;
+      var start = angle;
+      var end = angle + sweep;
+      parts += vxDonutSlice(cx, cy, r, innerR, start, end, d.color);
+      angle = end;
+    });
+    svg.innerHTML = parts;
+
+    document.getElementById('donutLegend').innerHTML = DEMO_VACCINE_MIX.map(function (d) {
+      var pct = Math.round((d.value / total) * 100);
+      return '<div class="li"><span class="sw" style="background:' + d.color + ';"></span>' + d.label + ' — ' + pct + '%</div>';
+    }).join('');
+  }
+
+  function vxPolarToCartesian(cx, cy, r, angleDeg) {
+    var rad = (angleDeg) * Math.PI / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+
+  function vxDonutSlice(cx, cy, rOuter, rInner, startAngle, endAngle, color) {
+    var p1 = vxPolarToCartesian(cx, cy, rOuter, startAngle);
+    var p2 = vxPolarToCartesian(cx, cy, rOuter, endAngle);
+    var p3 = vxPolarToCartesian(cx, cy, rInner, endAngle);
+    var p4 = vxPolarToCartesian(cx, cy, rInner, startAngle);
+    var largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
+    var d = [
+      'M', p1.x, p1.y,
+      'A', rOuter, rOuter, 0, largeArc, 1, p2.x, p2.y,
+      'L', p3.x, p3.y,
+      'A', rInner, rInner, 0, largeArc, 0, p4.x, p4.y,
+      'Z'
+    ].join(' ');
+    return '<path d="' + d + '" fill="' + color + '" stroke="#fff" stroke-width="1.5"></path>';
+  }
+
+  function vxOpenPdfModal() { document.getElementById('pdfModalOverlay').classList.add('open'); }
+  function vxClosePdfModal() { document.getElementById('pdfModalOverlay').classList.remove('open'); }
+  document.getElementById('pdfModalOverlay').addEventListener('click', function (e) {
+    if (e.target === this) vxClosePdfModal();
+  });
+</script>
+</body>
+</html>

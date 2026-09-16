@@ -1,0 +1,841 @@
+<style>
+  #dashboardPanel .db-container { max-width: 1400px; margin: 20px auto; padding: 0 20px 30px; }
+  #dashboardPanel .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 15px; margin: 20px 0; }
+  #dashboardPanel .stat-card { background: #fff; border-radius: 10px; padding: 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); text-align: center; border-top: 3px solid var(--vx-teal); }
+  #dashboardPanel .stat-card .number { font-size: 2.1em; font-weight: 700; color: var(--vx-navy); }
+  #dashboardPanel .stat-card .label { font-size: 0.85em; color: var(--vx-muted); margin-top: 4px; }
+  #dashboardPanel .stat-card.overdue { border-top-color: #e74c3c; } .stat-card.overdue .number { color: #e74c3c; }
+  #dashboardPanel .stat-card.due7 { border-top-color: #f39c12; } .stat-card.due7 .number { color: #f39c12; }
+  #dashboardPanel .stat-card.due30 { border-top-color: #2980b9; } .stat-card.due30 .number { color: #2980b9; }
+  #dashboardPanel .stat-card.future { border-top-color: var(--vx-green); } .stat-card.future .number { color: var(--vx-green); }
+  #dashboardPanel .section { background: #fff; border-radius: 10px; padding: 20px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+  #dashboardPanel .section h2 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 8px; color: var(--vx-navy); font-size: 1.05em; }
+  #dashboardPanel table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  #dashboardPanel th { background: #f0f4f9; text-align: left; padding: 10px 8px; color: var(--vx-navy); }
+  #dashboardPanel td { padding: 8px; border-bottom: 1px solid #eee; }
+  #dashboardPanel .status-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  #dashboardPanel .badge-overdue { background: #fadbd8; color: #922b21; }
+  #dashboardPanel .badge-due { background: #fdebd0; color: #935e38; }
+  #dashboardPanel .badge-future { background: #d5f5e3; color: #1a7a4a; }
+  #dashboardPanel .badge-pending { background: #fcf3cf; color: #7d6608; }
+  #dashboardPanel .badge-complete { background: #d5f5e3; color: #1a7a4a; }
+  #dashboardPanel .badge-action { background: #ebf5fb; color: #1b4f72; }
+  #dashboardPanel .scroll { overflow-x: auto; }
+  #dashboardPanel .empty-row td { text-align: center; color: var(--vx-muted); padding: 18px; }
+  #dashboardPanel .db-msg { padding: 10px 14px; border-radius: 6px; background: #fadbd8; color: #922b21; display: none; margin-bottom: 15px; }
+  #dashboardPanel .db-toolbar { display: flex; justify-content: flex-end; gap: 10px; align-items: flex-start; position: relative; }
+  #dashboardPanel .refresh-btn, #dashboardPanel .filter-btn { border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.85em; cursor: pointer; color: #fff; }
+  #dashboardPanel .refresh-btn { background: var(--vx-teal); }
+  #dashboardPanel .filter-btn { background: var(--vx-navy); position: relative; }
+  #dashboardPanel .filter-btn.active { background: var(--vx-navy-dark, #10243f); box-shadow: 0 0 0 2px rgba(20,80,140,0.35); }
+  #dashboardPanel .filter-menu {
+    display: none; position: absolute; top: 34px; right: 90px; background: #fff; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18); padding: 12px; z-index: 20; min-width: 280px;
+  }
+  #dashboardPanel .filter-menu.open { display: block; }
+  #dashboardPanel .filter-menu .filter-option {
+    display: block; width: 100%; text-align: left; padding: 9px 12px; margin-bottom: 6px; border-radius: 6px;
+    border: 1px solid #dbe1ea; background: #f8fafc; cursor: pointer; font-size: 0.88em; color: #2c3e50;
+  }
+  #dashboardPanel .filter-menu .filter-option:hover { background: #eef3f8; }
+  #dashboardPanel .filter-menu .filter-option.selected { background: var(--vx-teal); color: #fff; border-color: var(--vx-teal); }
+  #dashboardPanel .filter-menu select { width: 100%; padding: 8px; margin-top: 6px; border: 1px solid #dbe1ea; border-radius: 6px; font-size: 0.88em; }
+  #dashboardPanel .filter-menu .filter-actions { display: flex; justify-content: space-between; margin-top: 10px; }
+  #dashboardPanel .filter-menu .filter-clear { background: none; border: none; color: #922b21; font-size: 0.82em; cursor: pointer; text-decoration: underline; padding: 0; }
+  #dashboardPanel .filter-status {
+    background: #eaf6f4; color: #155e56; border-radius: 6px; padding: 8px 14px; font-size: 0.88em;
+    display: none; margin: 10px 0 0; align-items: center; justify-content: space-between;
+  }
+  #dashboardPanel .filter-status.active { display: flex; }
+  #dashboardPanel .filter-status button { background: none; border: none; color: #155e56; text-decoration: underline; cursor: pointer; font-size: 0.85em; }
+
+  /* PDF Export modal */
+  #dashboardPanel .pdf-modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(15,28,74,0.45);
+    z-index: 1000; align-items: center; justify-content: center; padding: 20px;
+  }
+  #dashboardPanel .pdf-modal-overlay.open { display: flex; }
+  #dashboardPanel .pdf-modal {
+    background: #fff; border-radius: 10px; max-width: 460px; width: 100%;
+    max-height: 88vh; overflow-y: auto; box-shadow: 0 24px 48px rgba(0,0,0,0.25); padding: 24px 26px;
+  }
+  #dashboardPanel .pdf-modal h3 { margin: 0 0 4px; color: var(--vx-navy); border-bottom: 1px solid #eee; padding-bottom: 10px; }
+  #dashboardPanel .pdf-modal .pdf-sub { font-size: 0.85em; color: var(--vx-muted); margin: 8px 0 16px; }
+  #dashboardPanel .pdf-row { margin-bottom: 14px; }
+  #dashboardPanel .pdf-row label { display: block; font-weight: 600; font-size: 0.85em; color: #34495e; margin-bottom: 4px; }
+  #dashboardPanel .pdf-row input[type="date"] { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #dbe1ea; border-radius: 6px; font-size: 14px; }
+  #dashboardPanel .pdf-two-col { display: flex; gap: 12px; }
+  #dashboardPanel .pdf-two-col > .pdf-row { flex: 1; min-width: 0; }
+  #dashboardPanel .pdf-checkbox-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; padding: 10px 12px; background: #fff8e1; border: 1px solid #f5d78e; border-radius: 6px; }
+  #dashboardPanel .pdf-checkbox-row input { margin-top: 3px; flex-shrink: 0; }
+  #dashboardPanel .pdf-checkbox-row .pdf-checkbox-label { font-size: 0.82em; color: #6b5300; line-height: 1.4; }
+  #dashboardPanel .pdf-checkbox-row .pdf-checkbox-label strong { color: #4a3d00; }
+  #dashboardPanel .pdf-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+  #dashboardPanel .pdf-modal-actions button { padding: 9px 20px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+  #dashboardPanel .pdf-btn-cancel { background: #eef1f6; color: #34495e; }
+  #dashboardPanel .pdf-btn-generate { background: var(--vx-navy); color: #fff; }
+  #dashboardPanel .pdf-btn-generate:disabled { opacity: 0.6; cursor: not-allowed; }
+  #dashboardPanel .pdf-status-msg { font-size: 0.82em; margin-top: 10px; padding: 8px 10px; border-radius: 6px; display: none; }
+  #dashboardPanel .pdf-status-msg.show { display: block; }
+  #dashboardPanel .pdf-status-msg--error { background: #fadbd8; color: #922b21; }
+  #dashboardPanel .pdf-status-msg--info { background: #eaf6f4; color: #155e56; }
+</style>
+
+<div class="db-container">
+  <div id="db-message" class="db-msg"></div>
+  <div class="db-toolbar">
+    <button class="filter-btn" id="filterByBtn" onclick="vxToggleFilterMenu()">🔍 Filter By</button>
+    <button class="refresh-btn" onclick="vxRefreshClicked()">🔄 Refresh</button>
+    <button class="refresh-btn" id="exportPdfBtn" style="background:var(--vx-navy);" onclick="vxOpenPdfModal()">📄 Export PDF</button>
+    <div class="filter-menu" id="filterMenu">
+      <button type="button" class="filter-option" id="filterOptDepartment" onclick="vxChooseFilterType('department')">Department</button>
+      <div id="departmentValueWrap" style="display:none;">
+        <select id="departmentValueSelect" onchange="vxApplyDepartmentFilter()">
+          <option value="">-- Select a department --</option>
+        </select>
+      </div>
+      <button type="button" class="filter-option" id="filterOptSite" onclick="vxChooseFilterType('site')">Site of Vaccination</button>
+      <div id="siteValueWrap" style="display:none;">
+        <select id="provinceValueSelect" onchange="vxPopulateSiteOptions()">
+          <option value="">-- Select a province --</option>
+        </select>
+        <select id="siteValueSelect" onchange="vxApplySiteFilter()" disabled>
+          <option value="">-- Select a province first --</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button type="button" class="filter-clear" onclick="vxClearFilter()">Clear filter (show all)</button>
+      </div>
+    </div>
+  </div>
+  <h1 style="color:var(--vx-navy); font-size:1.3em; margin:8px 0 0;">Program Monitoring &amp; Dose Follow-Up Summary</h1>
+  <div class="filter-status" id="filterStatus">
+    <span id="filterStatusText"></span>
+    <button type="button" onclick="vxClearFilter()">Clear</button>
+  </div>
+
+  <div id="stats" class="stats-grid"></div>
+  <div id="stats2" class="stats-grid"></div>
+
+  <div class="section">
+    <h2>🔔 Action Required</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Recipient</th><th>Department</th><th>Site of Vaccination</th><th>Vaccine</th><th>Dose</th><th>Disposition</th><th>Reason</th><th>Review Date</th><th>Action</th></tr>
+        </thead>
+        <tbody id="actionTable"><tr class="empty-row"><td colspan="9">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📅 Upcoming Doses / Appointments</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Recipient</th><th>Department</th><th>Site of Vaccination</th><th>Vaccine</th><th>Next Dose</th><th>Recommended Date</th><th>Days Until</th><th>Status</th></tr>
+        </thead>
+        <tbody id="upcomingTable"><tr class="empty-row"><td colspan="8">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏢 Department Follow-Up Summary</h2>
+    <p style="margin:-4px 0 12px; font-size:0.85em; color:var(--vx-muted);">
+      Always shows every Department/Unit, independent of the Filter By selection above — CHANGED per client instruction: this replaces the old Assigned Site/Location breakdown, computed live from Vaccination_Tracker rather than any sheet formula.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Department</th><th>Recipients with Due</th><th>Total Due Doses</th><th>Due ≤30 Days</th><th>Due 31–90 Days</th><th>Future Doses</th></tr>
+        </thead>
+        <tbody id="deptTable"><tr class="empty-row"><td colspan="6">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PDF EXPORT MODAL — calls getPdfReportData() in Code.gs, then builds
+     the actual PDF client-side (jsPDF + jspdf-autotable + Chart.js,
+     loaded below). Privacy checkboxes default UNCHECKED per client
+     instruction: contact info and clinical/reason detail are excluded
+     from the export unless explicitly opted into here.
+     ============================================================ -->
+<div class="pdf-modal-overlay" id="pdfModalOverlay">
+  <div class="pdf-modal">
+    <h3>📄 Export Program Report (PDF)</h3>
+    <p class="pdf-sub">Covers the Detailed Recipient Table, Visual Analytics, and Exceptions below for the date range you choose. The Executive Summary always reflects the program's current overall status, same as the live dashboard above.</p>
+
+    <div class="pdf-two-col">
+      <div class="pdf-row">
+        <label for="pdfStartDate">From</label>
+        <input type="date" id="pdfStartDate">
+      </div>
+      <div class="pdf-row">
+        <label for="pdfEndDate">To</label>
+        <input type="date" id="pdfEndDate">
+      </div>
+    </div>
+    <p class="pdf-sub" style="margin-top:-8px;">Leave both blank to include every record on file.</p>
+
+    <div class="pdf-checkbox-row">
+      <input type="checkbox" id="pdfIncludeContact">
+      <span class="pdf-checkbox-label"><strong>Include contact info (email)</strong> — off by default. Only check this if sharing this report outside IT/Admin has been explicitly approved.</span>
+    </div>
+    <div class="pdf-checkbox-row">
+      <input type="checkbox" id="pdfIncludeClinical">
+      <span class="pdf-checkbox-label"><strong>Include clinical/reason detail</strong> (Reason Category &amp; Specific Reason for deferrals, no-shows, contraindications) — off by default, same reasoning as above.</span>
+    </div>
+
+    <div id="pdfStatusMsg" class="pdf-status-msg"></div>
+
+    <div class="pdf-modal-actions">
+      <button type="button" class="pdf-btn-cancel" onclick="vxClosePdfModal()">Cancel</button>
+      <button type="button" class="pdf-btn-generate" id="pdfGenerateBtn" onclick="vxGeneratePdfReport()">Generate PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- Off-screen canvases Chart.js draws into before being embedded as
+     images in the PDF — never shown in the page itself. -->
+<div style="position:absolute; left:-9999px; top:-9999px;">
+  <canvas id="pdfChartVaccineType" width="600" height="360"></canvas>
+  <canvas id="pdfChartDisposition" width="600" height="360"></canvas>
+</div>
+
+<!-- jsdelivr instead of cdnjs: some corporate/hospital networks that block
+     cdnjs.cloudflare.com allow jsdelivr, and vice versa — if PDF export
+     ever fails with "X is not defined" again, open the browser console's
+     Network tab and check whether these three requests actually
+     succeeded (200) or were blocked/timed out; that tells you which CDN
+     this network allows, if either. -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+  var vxDashboardLoaded = false;
+  // vxFilterMode: 'none' | 'department' | 'site'
+  var vxFilterMode = 'none';
+  var vxFilterValue = '';
+  var vxFilterOptionsCache = null; // { departments, provinces, sitesByProvince } — fetched once, reused
+
+  function vxRefreshClicked() {
+    vxLoadDashboard(vxFilterMode, vxFilterValue);
+  }
+
+  // Every view — filtered or not — goes through the SAME live-computed
+  // getDashboardData() call now (see the comment in Code.gs's DASHBOARD API
+  // section for why the old dual-path split was retired).
+  function vxLoadDashboard(mode, filterValue) {
+    vxDashboardLoaded = true;
+    vxFilterMode = mode || 'none';
+    vxFilterValue = filterValue || '';
+    vxHideDbMsg();
+    vxUpdateFilterStatusUI();
+
+    google.script.run
+      .withSuccessHandler(function (result) {
+        vxRenderStats(result.stats);
+        vxRenderAction(result.actionRequired);
+        vxRenderUpcoming(result.upcomingDoses);
+      })
+      .withFailureHandler(vxDbErr)
+      .getDashboardData(vxFilterMode, vxFilterValue);
+
+    // The Department Follow-Up Summary always shows every department — it
+    // is not affected by the Filter By selection (see note in the UI).
+    google.script.run.withSuccessHandler(vxRenderDepartments).withFailureHandler(vxDbErr).getDepartmentSummary();
+  }
+
+  function vxDbErr(err) {
+    var el = document.getElementById('db-message');
+    el.textContent = 'ERROR loading dashboard: ' + err.message;
+    el.style.display = 'block';
+  }
+  function vxHideDbMsg() { document.getElementById('db-message').style.display = 'none'; }
+
+  // ---- Filter By menu ----
+  function vxToggleFilterMenu() {
+    var menu = document.getElementById('filterMenu');
+    var willOpen = !menu.classList.contains('open');
+    menu.classList.toggle('open', willOpen);
+    document.getElementById('filterByBtn').classList.toggle('active', willOpen);
+    if (willOpen && !vxFilterOptionsCache) vxLoadFilterOptions();
+  }
+
+  function vxLoadFilterOptions() {
+    google.script.run
+      .withSuccessHandler(function (opts) {
+        vxFilterOptionsCache = opts || { departments: [], provinces: [], sitesByProvince: {} };
+        var deptSelect = document.getElementById('departmentValueSelect');
+        deptSelect.innerHTML = '<option value="">-- Select a department --</option>';
+        vxFilterOptionsCache.departments.forEach(function (d) {
+          var opt = document.createElement('option'); opt.value = d; opt.text = d; deptSelect.appendChild(opt);
+        });
+        var provSelect = document.getElementById('provinceValueSelect');
+        provSelect.innerHTML = '<option value="">-- Select a province --</option>';
+        vxFilterOptionsCache.provinces.forEach(function (p) {
+          var opt = document.createElement('option'); opt.value = p; opt.text = p; provSelect.appendChild(opt);
+        });
+      })
+      .withFailureHandler(vxDbErr)
+      .getFilterOptionsV2();
+  }
+
+  // Only ONE of the two filter dimensions can be active at a time.
+  function vxChooseFilterType(type) {
+    document.getElementById('filterOptDepartment').classList.toggle('selected', type === 'department');
+    document.getElementById('filterOptSite').classList.toggle('selected', type === 'site');
+    document.getElementById('departmentValueWrap').style.display = (type === 'department') ? 'block' : 'none';
+    document.getElementById('siteValueWrap').style.display = (type === 'site') ? 'block' : 'none';
+    if (!vxFilterOptionsCache) vxLoadFilterOptions();
+  }
+
+  // Site of Vaccination is a TWO-LEVEL cascade per client instruction:
+  // pick a province first, which scopes the second dropdown to only the
+  // sites actually logged under that province (see getFilterOptionsV2 in
+  // Code.gs — sitesByProvince).
+  function vxPopulateSiteOptions() {
+    var province = document.getElementById('provinceValueSelect').value;
+    var siteSelect = document.getElementById('siteValueSelect');
+    siteSelect.innerHTML = '<option value="">-- Select a site --</option>';
+    if (!province || !vxFilterOptionsCache) {
+      siteSelect.disabled = true;
+      siteSelect.innerHTML = '<option value="">-- Select a province first --</option>';
+      return;
+    }
+    var sites = vxFilterOptionsCache.sitesByProvince[province] || [];
+    sites.forEach(function (s) {
+      var opt = document.createElement('option'); opt.value = s; opt.text = s; siteSelect.appendChild(opt);
+    });
+    siteSelect.disabled = false;
+  }
+
+  function vxApplyDepartmentFilter() {
+    var value = document.getElementById('departmentValueSelect').value;
+    if (!value) return;
+    document.getElementById('filterMenu').classList.remove('open');
+    document.getElementById('filterByBtn').classList.remove('active');
+    vxLoadDashboard('department', value);
+  }
+
+  function vxApplySiteFilter() {
+    var value = document.getElementById('siteValueSelect').value;
+    if (!value) return;
+    document.getElementById('filterMenu').classList.remove('open');
+    document.getElementById('filterByBtn').classList.remove('active');
+    vxLoadDashboard('site', value);
+  }
+
+  function vxClearFilter() {
+    document.getElementById('filterMenu').classList.remove('open');
+    document.getElementById('filterByBtn').classList.remove('active');
+    document.getElementById('filterOptDepartment').classList.remove('selected');
+    document.getElementById('filterOptSite').classList.remove('selected');
+    document.getElementById('departmentValueWrap').style.display = 'none';
+    document.getElementById('siteValueWrap').style.display = 'none';
+    document.getElementById('departmentValueSelect').value = '';
+    document.getElementById('provinceValueSelect').value = '';
+    document.getElementById('siteValueSelect').innerHTML = '<option value="">-- Select a province first --</option>';
+    document.getElementById('siteValueSelect').disabled = true;
+    vxLoadDashboard('none', '');
+  }
+
+  function vxUpdateFilterStatusUI() {
+    var statusEl = document.getElementById('filterStatus');
+    var textEl = document.getElementById('filterStatusText');
+    if (vxFilterMode === 'department' && vxFilterValue) {
+      textEl.textContent = 'Showing: Department — ' + vxFilterValue;
+      statusEl.classList.add('active');
+    } else if (vxFilterMode === 'site' && vxFilterValue) {
+      textEl.textContent = 'Showing: Site of Vaccination — ' + vxFilterValue;
+      statusEl.classList.add('active');
+    } else {
+      statusEl.classList.remove('active');
+    }
+  }
+
+  // Close the filter menu when clicking outside it.
+  document.addEventListener('click', function (e) {
+    var menu = document.getElementById('filterMenu');
+    var btn = document.getElementById('filterByBtn');
+    if (menu.classList.contains('open') && !menu.contains(e.target) && e.target !== btn) {
+      menu.classList.remove('open');
+      btn.classList.remove('active');
+    }
+  });
+
+  function vxRenderStats(s) {
+    document.getElementById('stats').innerHTML =
+      vxStatCard(s.activeRecipients, 'Active Recipients') +
+      vxStatCard(s.vaccinatedRecipients, 'Vaccinated Recipients') +
+      vxStatCard(s.dosesAdministered, 'Doses Administered') +
+      vxStatCard(s.nextDosesDue, 'Next Doses Due') +
+      vxStatCard(s.seriesCompleted, 'Series Completed') +
+      vxStatCard(s.actionRequired, 'Action Required');
+    document.getElementById('stats2').innerHTML =
+      vxStatCard(s.overdue, 'Overdue', 'overdue') +
+      vxStatCard(s.due7, 'Due ≤7 Days', 'due7') +
+      vxStatCard(s.due30, 'Due 8–30 Days', 'due30') +
+      vxStatCard(s.due90, 'Due 31–90 Days', 'due30') +
+      vxStatCard(s.future, 'Future', 'future');
+  }
+  function vxStatCard(value, label, cls) {
+    return '<div class="stat-card ' + (cls || '') + '"><div class="number">' + (value === '' || value === undefined ? '0' : value) + '</div><div class="label">' + label + '</div></div>';
+  }
+
+  function vxRenderAction(rows) {
+    var body = document.getElementById('actionTable');
+    if (!rows || rows.length === 0) { body.innerHTML = '<tr class="empty-row"><td colspan="9">Nothing requires action right now.</td></tr>'; return; }
+    body.innerHTML = rows.map(function (r) {
+      return '<tr>' +
+        '<td>' + vxEsc(r.name) + '<br><small style="color:var(--vx-muted)">' + vxEsc(r.recipientId) + '</small></td>' +
+        '<td>' + vxEsc(r.department) + '</td>' +
+        '<td>' + vxEsc(r.site) + '</td>' +
+        '<td>' + vxEsc(r.vaccineType) + '</td>' +
+        '<td>' + vxEsc(r.intendedDose) + '</td>' +
+        '<td>' + vxEsc(r.disposition) + '</td>' +
+        '<td>' + vxEsc(r.reasonStatus) + '</td>' +
+        '<td>' + vxEsc(r.reviewDueDate) + '</td>' +
+        '<td><span class="status-badge badge-action">' + vxEsc(r.requiredAction) + '</span></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function vxRenderUpcoming(rows) {
+    var body = document.getElementById('upcomingTable');
+    if (!rows || rows.length === 0) { body.innerHTML = '<tr class="empty-row"><td colspan="8">No upcoming doses.</td></tr>'; return; }
+    body.innerHTML = rows.map(function (r) {
+      var badgeClass = 'badge-future';
+      if (r.dueStatus === 'OVERDUE') badgeClass = 'badge-overdue';
+      else if (r.dueStatus === 'DUE ≤7 DAYS' || r.dueStatus === 'DUE 8–30 DAYS') badgeClass = 'badge-due';
+      return '<tr>' +
+        '<td>' + vxEsc(r.name) + '<br><small style="color:var(--vx-muted)">' + vxEsc(r.recipientId) + '</small></td>' +
+        '<td>' + vxEsc(r.department) + '</td>' +
+        '<td>' + vxEsc(r.site) + '</td>' +
+        '<td>' + vxEsc(r.vaccineType) + '</td>' +
+        '<td>' + vxEsc(r.nextDose) + '</td>' +
+        '<td>' + vxFmtDate(r.recommendedDate) + '</td>' +
+        '<td>' + vxEsc(r.daysUntilDue) + '</td>' +
+        '<td><span class="status-badge ' + badgeClass + '">' + vxEsc(r.dueStatus) + '</span></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function vxRenderDepartments(rows) {
+    var body = document.getElementById('deptTable');
+    if (!rows || rows.length === 0) { body.innerHTML = '<tr class="empty-row"><td colspan="6">No department data yet.</td></tr>'; return; }
+    body.innerHTML = rows.map(function (r) {
+      return '<tr>' +
+        '<td>' + vxEsc(r.department) + '</td>' +
+        '<td>' + vxEsc(r.recipientsWithDue) + '</td>' +
+        '<td>' + vxEsc(r.totalDueDoses) + '</td>' +
+        '<td>' + vxEsc(r.dueWithin30) + '</td>' +
+        '<td>' + vxEsc(r.due31to90) + '</td>' +
+        '<td>' + vxEsc(r.futureDoses) + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function vxFmtDate(v) {
+    if (!v) return '—';
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return vxEsc(v);
+    return d.toLocaleDateString();
+  }
+  function vxEsc(v) {
+    if (v === null || v === undefined || v === '') return '—';
+    return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ============================================================
+  // PDF EXPORT
+  // ============================================================
+  function vxOpenPdfModal() {
+    document.getElementById('pdfStatusMsg').classList.remove('show');
+    document.getElementById('pdfModalOverlay').classList.add('open');
+  }
+  function vxClosePdfModal() {
+    document.getElementById('pdfModalOverlay').classList.remove('open');
+  }
+  document.getElementById('pdfModalOverlay').addEventListener('click', function (e) {
+    if (e.target === this) vxClosePdfModal();
+  });
+
+  function vxShowPdfStatus(text, type) {
+    var el = document.getElementById('pdfStatusMsg');
+    el.textContent = text;
+    el.className = 'pdf-status-msg show pdf-status-msg--' + type;
+  }
+
+  function vxGeneratePdfReport() {
+    // These three globals come from the CDN <script> tags loaded above.
+    // If the browser's network blocks that CDN (a real risk on locked-down
+    // corporate/hospital networks), those tags fail silently and this is
+    // the first point that would otherwise throw a cryptic
+    // "X is not defined" deep inside chart/PDF building — catch it here
+    // instead with a message that actually tells you what's wrong.
+    if (typeof Chart === 'undefined' || typeof window.jspdf === 'undefined') {
+      vxShowPdfStatus(
+        '⚠️ Could not load the PDF/chart libraries (Chart.js / jsPDF) from cdn.jsdelivr.net. ' +
+        'This network may be blocking that CDN. Open the browser\'s DevTools → Network tab, reload, ' +
+        'and check whether the chart.js / jspdf / jspdf-autotable requests failed — then let IT know which CDN is reachable.',
+        'error'
+      );
+      return;
+    }
+
+    var startDate = document.getElementById('pdfStartDate').value || null;
+    var endDate = document.getElementById('pdfEndDate').value || null;
+    var includeContactInfo = document.getElementById('pdfIncludeContact').checked;
+    var includeClinicalDetails = document.getElementById('pdfIncludeClinical').checked;
+
+    var btn = document.getElementById('pdfGenerateBtn');
+    btn.disabled = true;
+    btn.textContent = 'Fetching data…';
+    vxShowPdfStatus('Fetching report data from the sheet…', 'info');
+
+    google.script.run
+      .withSuccessHandler(function (result) {
+        if (!result || !result.success) {
+          btn.disabled = false;
+          btn.textContent = 'Generate PDF';
+          vxShowPdfStatus('Could not load report data.', 'error');
+          return;
+        }
+        btn.textContent = 'Building PDF…';
+        vxShowPdfStatus('Building charts and assembling the document…', 'info');
+        try {
+          vxBuildPdfFromData(result);
+          btn.disabled = false;
+          btn.textContent = 'Generate PDF';
+          vxShowPdfStatus('✅ PDF downloaded to your browser.', 'info');
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = 'Generate PDF';
+          vxShowPdfStatus('Error building PDF: ' + e.message, 'error');
+        }
+      })
+      .withFailureHandler(function (err) {
+        btn.disabled = false;
+        btn.textContent = 'Generate PDF';
+        vxShowPdfStatus('ERROR: ' + err.message, 'error');
+      })
+      .getPdfReportData({
+        startDate: startDate,
+        endDate: endDate,
+        includeContactInfo: includeContactInfo,
+        includeClinicalDetails: includeClinicalDetails
+      });
+  }
+
+  var vxPdfChartVaccine = null, vxPdfChartDisposition = null;
+  var VX_PDF_PALETTE = ['#16296b', '#1fb6a8', '#f39c12', '#e74c3c', '#3ec97a', '#8e44ad', '#2980b9', '#95a5a6'];
+
+  // Builds the two Chart.js charts on hidden canvases and reads them back
+  // as PNG data URLs to embed in the PDF. Chart.js with animation:false
+  // draws synchronously on construction, so the canvas is fully rendered
+  // by the time toDataURL() runs immediately after — no need to wait for
+  // an async render/animation-complete event.
+  function vxBuildPdfCharts(data) {
+    if (vxPdfChartVaccine) { vxPdfChartVaccine.destroy(); vxPdfChartVaccine = null; }
+    if (vxPdfChartDisposition) { vxPdfChartDisposition.destroy(); vxPdfChartDisposition = null; }
+
+    var vaccineLabels = Object.keys(data.vaccineTypeCounts || {});
+    var vaccineValues = vaccineLabels.map(function (k) { return data.vaccineTypeCounts[k]; });
+    var dispositionLabels = Object.keys(data.dispositionCounts || {});
+    var dispositionValues = dispositionLabels.map(function (k) { return data.dispositionCounts[k]; });
+
+    var vaccineCanvas = document.getElementById('pdfChartVaccineType');
+    vxPdfChartVaccine = new Chart(vaccineCanvas, {
+      type: 'bar',
+      data: { labels: vaccineLabels, datasets: [{ label: 'Records', data: vaccineValues, backgroundColor: '#1fb6a8' }] },
+      options: {
+        animation: false, responsive: false,
+        plugins: { legend: { display: false }, title: { display: true, text: 'Records by Vaccine Type', font: { size: 14 } } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+
+    var dispositionCanvas = document.getElementById('pdfChartDisposition');
+    vxPdfChartDisposition = new Chart(dispositionCanvas, {
+      type: 'doughnut',
+      data: { labels: dispositionLabels, datasets: [{ data: dispositionValues, backgroundColor: VX_PDF_PALETTE }] },
+      options: {
+        animation: false, responsive: false,
+        plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } }, title: { display: true, text: 'Dose Disposition Breakdown', font: { size: 14 } } }
+      }
+    });
+
+    return {
+      vaccineImg: vaccineCanvas.toDataURL('image/png'),
+      dispositionImg: dispositionCanvas.toDataURL('image/png')
+    };
+  }
+
+  // Builds and downloads the actual PDF. Layout: branded header banner ->
+  // Report Metadata -> Executive Summary (current overall snapshot,
+  // clearly labeled as such) -> Visual Analytics (the two charts above) ->
+  // Breakdown by Site & Department (two side-by-side tables) ->
+  // Exceptions & Action Items table -> Detailed Recipient Table -> page
+  // numbers/footer on every page.
+  //
+  // KNOWN LIMITATION: the branded navy header banner is only drawn on
+  // pages THIS function adds directly (via ensureSpace/addPage). If the
+  // Detailed Recipient Table itself runs long enough that jspdf-autotable
+  // adds its OWN continuation pages mid-table, those specific pages will
+  // be plain white (still get the page-number footer, just not the top
+  // banner) — a cosmetic gap, not a data gap; every row is still there.
+  function vxBuildPdfFromData(data) {
+    var charts = vxBuildPdfCharts(data);
+    var jsPDFCtor = window.jspdf.jsPDF;
+    var doc = new jsPDFCtor({ unit: 'pt', format: 'a4' });
+    var pageWidth = doc.internal.pageSize.getWidth();
+    var pageHeight = doc.internal.pageSize.getHeight();
+    var margin = 40;
+    var y = 0;
+    var meta = data.metadata;
+    var NAVY = [22, 41, 107], TEAL = [31, 182, 168];
+
+    function addHeader(pageTitle) {
+      doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+      doc.rect(0, 0, pageWidth, 60, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont(undefined, 'bold');
+      doc.text(meta.clientName || 'VxSync', margin, 30);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(pageTitle, margin, 46);
+      doc.setTextColor(0, 0, 0);
+      y = 80;
+    }
+
+    // How much clearance from the bottom edge we insist on before treating
+    // content as "still fits" on the current page. Deliberately generous —
+    // the goal is to never let a title, a table header, or a table's last
+    // row crowd the footer or the physical page edge. When in doubt, this
+    // pushes to a fresh page rather than squeezing things in.
+    var BOTTOM_SAFE = 70;
+    // Extra room autoTable itself leaves at the bottom of every page before
+    // it continues a table onto the next page — same "give it room, don't
+    // force it to fit" principle, applied inside jspdf-autotable's own
+    // pagination.
+    var TABLE_MARGIN_BOTTOM = 56;
+
+    function ensureSpace(neededHeight) {
+      if (y + neededHeight > pageHeight - BOTTOM_SAFE) {
+        doc.addPage();
+        addHeader('Program Report (continued)');
+      }
+    }
+
+    function sectionTitle(text) {
+      ensureSpace(30);
+      doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+      doc.setFontSize(13);
+      doc.setFont(undefined, 'bold');
+      doc.text(text, margin, y);
+      doc.setDrawColor(TEAL[0], TEAL[1], TEAL[2]);
+      doc.setLineWidth(1.2);
+      doc.line(margin, y + 4, pageWidth - margin, y + 4);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont(undefined, 'normal');
+      y += 22;
+    }
+
+    addHeader('Program Report');
+
+    // ---- Report Metadata ----
+    sectionTitle('Report Metadata');
+    doc.setFontSize(9.5);
+    [
+      'Client: ' + (meta.clientName || '—'),
+      'Generated by: ' + (meta.generatedBy || '—'),
+      'Generated at: ' + new Date(meta.generatedAt).toLocaleString(),
+      'Date range: ' + (meta.startDate || 'All records on file') + '  to  ' + (meta.endDate || 'All records on file'),
+      'Records in range: ' + meta.recordCount,
+      'Contact info included: ' + (meta.includeContactInfo ? 'Yes' : 'No'),
+      'Clinical/reason detail included: ' + (meta.includeClinicalDetails ? 'Yes' : 'No')
+    ].forEach(function (line) { doc.text(line, margin, y); y += 13; });
+    y += 4;
+    doc.setFontSize(8.5);
+    doc.setTextColor(120, 120, 120);
+    (doc.splitTextToSize(meta.reportScopeNote || '', pageWidth - margin * 2)).forEach(function (line) {
+      doc.text(line, margin, y); y += 11;
+    });
+    doc.setTextColor(0, 0, 0);
+    y += 12;
+
+    // ---- Executive Summary ----
+    sectionTitle('Executive Summary');
+    doc.setFontSize(10);
+    if (data.summaryStats) {
+      var s = data.summaryStats;
+      var pairs = [
+        ['Active Recipients', s.activeRecipients], ['Vaccinated Recipients', s.vaccinatedRecipients],
+        ['Doses Administered', s.dosesAdministered], ['Next Doses Due', s.nextDosesDue],
+        ['Series Completed', s.seriesCompleted], ['Action Required', s.actionRequired],
+        ['Overdue', s.overdue], ['Due ≤7 Days', s.due7],
+        ['Due 8–30 Days', s.due30], ['Due 31–90 Days', s.due90],
+        ['Future', s.future]
+      ];
+      var colWidth = (pageWidth - margin * 2) / 2, startY = y;
+      pairs.forEach(function (pair, i) {
+        var colX = margin + (i % 2) * colWidth;
+        var rowY = startY + Math.floor(i / 2) * 16;
+        doc.setFont(undefined, 'bold');
+        doc.text(String(pair[1] === undefined || pair[1] === null || pair[1] === '' ? '—' : pair[1]), colX, rowY);
+        doc.setFont(undefined, 'normal');
+        doc.text(' ' + pair[0], colX + 30, rowY);
+      });
+      y = startY + Math.ceil(pairs.length / 2) * 16 + 12;
+    } else {
+      doc.text('Executive summary unavailable (could not read Vaccination_Report).', margin, y);
+      y += 16;
+    }
+
+    // ---- Visual Analytics ----
+    ensureSpace(230);
+    sectionTitle('Visual Analytics');
+    var chartWidth = (pageWidth - margin * 2 - 16) / 2;
+    var chartHeight = chartWidth * (360 / 600);
+    doc.addImage(charts.vaccineImg, 'PNG', margin, y, chartWidth, chartHeight);
+    doc.addImage(charts.dispositionImg, 'PNG', margin + chartWidth + 16, y, chartWidth, chartHeight);
+    y += chartHeight + 24;
+
+    // ---- Breakdown by Site & Department ----
+    // Two compact side-by-side tables, sorted highest-count first, each row
+    // also showing % of the in-range record total so a reader can see at a
+    // glance whether e.g. one site is carrying a disproportionate load.
+    // KNOWN LIMITATION: same category as the Detailed Recipient Table note
+    // above — if a client has enough distinct sites or departments that
+    // ONE of these two tables needs its own continuation page while the
+    // other doesn't, jspdf-autotable paginates them independently and the
+    // two columns can drift out of visual alignment on the overflow page.
+    // Every row is still present and correctly labeled; it's a layout
+    // wrinkle, not a data problem. Unlikely in practice (site/department
+    // lists are usually short, single-page lists).
+    function buildBreakdownRows(countsObj) {
+      var total = 0;
+      Object.keys(countsObj || {}).forEach(function (k) { total += countsObj[k]; });
+      return Object.keys(countsObj || {})
+        .map(function (k) { return [k, countsObj[k]]; })
+        .sort(function (a, b) { return b[1] - a[1]; })
+        .map(function (r) {
+          var pct = total ? ((r[1] / total) * 100).toFixed(1) + '%' : '—';
+          return [r[0], r[1], pct];
+        });
+    }
+
+    // Reserve enough room for the title + the "By Site / By Department"
+    // labels + a table header row + at least one body row before
+    // committing to start this section here — if that doesn't fit, the
+    // whole section (title included) moves to a fresh page together
+    // rather than stranding a lone title at the bottom of this one.
+    ensureSpace(110);
+    sectionTitle('Breakdown by Site & Department');
+    var siteRows = buildBreakdownRows(data.siteCounts);
+    var deptRows = buildBreakdownRows(data.departmentCounts);
+    var halfWidth = (pageWidth - margin * 2 - 16) / 2;
+    var breakdownStartY = y;
+
+    doc.setFontSize(9.5);
+    doc.setFont(undefined, 'bold');
+    doc.text('By Vaccination Site', margin, y);
+    doc.text('By Department', margin + halfWidth + 16, y);
+    doc.setFont(undefined, 'normal');
+    y += 8;
+
+    doc.autoTable({
+      startY: y, head: [['Site', 'Records', '%']], body: siteRows.length ? siteRows : [['—', '—', '—']],
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: TEAL, textColor: 255 },
+      margin: { left: margin, right: pageWidth - margin - halfWidth, bottom: TABLE_MARGIN_BOTTOM },
+      tableWidth: halfWidth,
+      rowPageBreak: 'avoid',
+      showHead: 'everyPage'
+    });
+    var siteTableEndY = doc.lastAutoTable.finalY;
+
+    doc.autoTable({
+      startY: y, head: [['Department', 'Records', '%']], body: deptRows.length ? deptRows : [['—', '—', '—']],
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: NAVY, textColor: 255 },
+      margin: { left: margin + halfWidth + 16, right: margin, bottom: TABLE_MARGIN_BOTTOM },
+      tableWidth: halfWidth,
+      rowPageBreak: 'avoid',
+      showHead: 'everyPage'
+    });
+    var deptTableEndY = doc.lastAutoTable.finalY;
+
+    y = Math.max(siteTableEndY, deptTableEndY) + 24;
+
+    // ---- Exceptions & Action Items ----
+    // Same "commit the title only if a header + a row can follow it"
+    // reservation as above.
+    ensureSpace(90);
+    sectionTitle('Exceptions & Action Items (' + data.exceptions.length + ')');
+    if (data.exceptions.length) {
+      var excColumns = ['Recipient ID', 'Name', 'Vaccine', 'Status', 'Status Date', 'Review Date'];
+      if (meta.includeClinicalDetails) excColumns.splice(4, 0, 'Reason');
+      var excRows = data.exceptions.map(function (e) {
+        var row = [e.recipientId, e.name, e.vaccineType, e.disposition, e.statusDate, e.reviewDate];
+        if (meta.includeClinicalDetails) row.splice(4, 0, e.reasonCategory);
+        return row;
+      });
+      doc.autoTable({
+        startY: y, head: [excColumns], body: excRows,
+        styles: { fontSize: 8, cellPadding: 4 },
+        headStyles: { fillColor: NAVY, textColor: 255 },
+        margin: { left: margin, right: margin, bottom: TABLE_MARGIN_BOTTOM },
+        rowPageBreak: 'avoid',
+        showHead: 'everyPage'
+      });
+      y = doc.lastAutoTable.finalY + 24;
+    } else {
+      doc.setFontSize(9.5);
+      doc.text('No exceptions in this date range.', margin, y);
+      y += 20;
+    }
+
+    // ---- Detailed Recipient Table ----
+    ensureSpace(90);
+    sectionTitle('Detailed Recipient Table (' + data.recipients.length + ')');
+    var recColumns = ['Recipient ID', 'Name', 'Category', 'Vaccine', 'Brand', 'Dose', 'Disposition', 'Vaccination Date', 'Site'];
+    if (meta.includeContactInfo) recColumns.splice(2, 0, 'Email');
+    var recRows = data.recipients.map(function (r) {
+      var row = [r.recipientId, r.name, r.category, r.vaccineType, r.brand, r.doseNumber, r.disposition, r.vaccinationDate, r.site];
+      if (meta.includeContactInfo) row.splice(2, 0, r.email);
+      return row;
+    });
+    doc.autoTable({
+      startY: y, head: [recColumns], body: recRows,
+      styles: { fontSize: 7.5, cellPadding: 3 },
+      headStyles: { fillColor: TEAL, textColor: 255 },
+      margin: { left: margin, right: margin, bottom: TABLE_MARGIN_BOTTOM },
+      rowPageBreak: 'avoid',
+      showHead: 'everyPage'
+    });
+
+    // ---- Footer: page numbers on every page ----
+    var pageCount = doc.internal.getNumberOfPages();
+    for (var p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      doc.setFontSize(8);
+      doc.setTextColor(140, 140, 140);
+      doc.text(
+        'Page ' + p + ' of ' + pageCount + '  •  Internal report — handle per your organization\'s data privacy policy.',
+        margin, pageHeight - 20
+      );
+    }
+
+    var filenameSafe = (meta.clientName || 'VxSync').replace(/[^a-z0-9]+/gi, '_');
+    var dateSuffix = new Date().toISOString().slice(0, 10);
+    doc.save(filenameSafe + '_Program_Report_' + dateSuffix + '.pdf');
+  }
+</script>

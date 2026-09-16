@@ -1,0 +1,2006 @@
+<style>
+  #entryPanel .ef-container { max-width: 900px; margin: 20px auto; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  #entryPanel h2 { font-size: 1.05em; border-bottom: 1px solid var(--vx-border); padding-bottom: 8px; margin-top: 25px; color: var(--vx-navy); }
+  #entryPanel .form-row { display: flex; flex-wrap: wrap; margin-bottom: 12px; align-items: center; gap: 6px 0; }
+  #entryPanel .form-row label { width: 190px; font-weight: 600; color: #34495e; flex-shrink: 0; font-size: 0.92em; }
+  #entryPanel .form-row input, #entryPanel .form-row select, #entryPanel .form-row textarea {
+    flex: 1; padding: 8px 12px; border: 1px solid #dbe1ea; border-radius: 6px;
+    font-size: 14px; min-width: 200px;
+  }
+  #entryPanel .form-row textarea { height: 50px; resize: vertical; }
+  #entryPanel .form-row .readonly { background: #eef1f6; color: #2c3e50; }
+  #entryPanel .form-row select:disabled {
+    background: #eef1f6 !important;
+    color: #2c3e50;
+    cursor: not-allowed;
+    opacity: 0.85;
+  }
+  #entryPanel .btn-row { margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap; }
+  #entryPanel .btn { padding: 12px 28px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.15s; color: #fff; }
+  #entryPanel .btn-success { background: var(--vx-green); }
+  #entryPanel .btn-success:hover { filter: brightness(0.92); }
+  #entryPanel .btn-warning { background: #f39c12; }
+  #entryPanel .btn-warning:hover { filter: brightness(0.92); }
+  #entryPanel .btn-primary { background: var(--vx-teal); }
+  #entryPanel .btn-primary:hover { filter: brightness(0.92); }
+  #entryPanel .msg { padding: 10px 14px; margin: 15px 0; border-radius: 6px; display: none; font-size: 0.92em; }
+  #entryPanel .msg-success { background: #d5f5e3; color: #1a7a4a; border: 1px solid #82e0aa; }
+  #entryPanel .msg-error { background: #fadbd8; color: #922b21; border: 1px solid #f1948a; }
+  /* Distinct from msg-success on purpose — "saving" is a PENDING state,
+     not a resolved one, and shouldn't read as "done" while it's still in
+     flight. */
+  #entryPanel .msg-saving { background: #eaf2fb; color: #1c4e80; border: 1px solid #a9cdf0; }
+  /* #ef-message specifically (not the Add-Recipient modal's own .msg,
+     which is already inside a centered, on-top modal and doesn't need
+     this) is pinned to the viewport so a save confirmation or error is
+     visible no matter where the encoder has scrolled to on this long
+     form — previously it only appeared at the top of the form, which was
+     invisible while the Save button (at the very bottom) was on screen. */
+  #entryPanel #ef-message {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000;
+    width: min(640px, calc(100vw - 28px));
+    margin: 0;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    font-weight: 600;
+  }
+  #entryPanel .field-group { background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+  #entryPanel .field-group.site-first { background: #fff7e6; border: 1px solid #f5d78e; }
+  #entryPanel .field-group.followup { background: #eaf6f4; }
+  #entryPanel .ef-invalid { border-color: #e74c3c !important; box-shadow: 0 0 0 2px rgba(231,76,60,0.25); background: #fdf2f1; }
+  #entryPanel .ef-helper { font-size: 0.8em; color: #6b7a90; margin: -6px 0 12px 0; }
+  #entryPanel .ef-typo-notice { display: none; margin: -4px 0 12px; padding: 8px 12px; border-radius: 6px; font-size: 0.85em; }
+  #entryPanel .ef-typo-info { background: #eaf6f4; color: #155e56; }
+  #entryPanel .ef-typo-warn { background: #fff8e1; color: #8a6100; border: 1px solid #f5d78e; }
+  /* Distinct from .ef-typo-info/.ef-typo-warn on purpose: this is
+     specifically the "the system just changed what you typed" state
+     (auto-correction), which needs to visually read as more definite/
+     resolved than a mere suggestion — green + a solid left accent bar,
+     vs. the amber suggestion style above. */
+  #entryPanel .ef-typo-auto { background: #e8f8ee; color: #1a7a4a; border: 1px solid #a8e6bd; border-left: 4px solid #2ecc71; font-weight: 600; }
+
+  .info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #2980b9;
+    cursor: pointer;
+    background: #ebf5fb;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    user-select: none;
+    flex-shrink: 0;
+    transition: 0.15s;
+  }
+  .info-icon:hover {
+    background: #d4e6f1;
+  }
+  .info-icon:active {
+    background: #aed6f1;
+  }
+
+  .ef-helper-tooltip {
+    background: #fef9e7;
+    border-left: 3px solid #f1c40f;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin: 4px 0 8px 0;
+    font-size: 13px;
+    color: #7d6608;
+    line-height: 1.5;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .global-search-inline {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 160px;
+  }
+  .global-search-inline .search-icon {
+    font-size: 0.8em;
+    color: #7f8c8d;
+  }
+  .global-search-inline input {
+    flex: 1;
+    min-width: 80px;
+    padding: 6px 8px;
+    font-size: 0.8em;
+    border: 1px solid #d5dbe3;
+    border-radius: 4px;
+    background: #fafbfc;
+    color: #2c3e50;
+    transition: 0.15s;
+  }
+  .global-search-inline input:focus {
+    border-color: #2980b9;
+    background: #ffffff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(41,128,185,0.12);
+  }
+  .global-search-inline input::placeholder {
+    color: #b0b8c4;
+    font-style: italic;
+  }
+
+  @media (max-width: 700px) {
+    #entryPanel .form-row { flex-direction: column; align-items: stretch; }
+    #entryPanel .form-row label { width: auto; margin-bottom: 4px; }
+    .global-search-inline { min-width: unset; }
+    .ef-helper-tooltip { margin-left: 0 !important; }
+  }
+  /* Spinner animation for Save button */
+@keyframes vx-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+#saveBtn .spinner {
+  display: inline-block;
+  animation: vx-spin 0.9s linear infinite;
+  font-size: 1.1em;
+  margin-right: 6px;
+}
+
+#saveBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Add New Recipient — button + modal.
+   Lives inline in the same row as the recipient dropdown/search, right
+   after them — same row-based layout every other "field + its own info
+   icon" pair on this form uses (see Site of Vaccination, Vaccinator).
+   Its own ⓘ toggles its own helper line below, so it reads as a distinct
+   control with distinct help, not something sharing (or competing with)
+   the search box's tooltip. */
+.btn-add-recipient {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border: none;
+  background: var(--vx-teal);
+  color: #fff;
+  border-radius: 6px;
+  font-size: 0.82em;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: 0.15s;
+}
+.btn-add-recipient:hover { filter: brightness(0.92); }
+
+.ar-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 28, 74, 0.45);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.ar-modal-overlay.open { display: flex; }
+.ar-modal {
+  background: #fff;
+  border-radius: 10px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 48px rgba(0,0,0,0.25);
+  padding: 26px 28px;
+}
+.ar-modal h3 {
+  margin: 0 0 4px;
+  color: var(--vx-navy);
+  font-size: 1.1em;
+  border-bottom: 1px solid var(--vx-border);
+  padding-bottom: 10px;
+}
+.ar-modal .ar-sub {
+  font-size: 0.85em;
+  color: #6b7a90;
+  margin: 8px 0 16px;
+}
+.ar-modal .ar-row { margin-bottom: 12px; }
+.ar-modal .ar-row label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85em;
+  color: #34495e;
+  margin-bottom: 4px;
+}
+.ar-modal .ar-row input, .ar-modal .ar-row select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #dbe1ea;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.ar-modal .ar-two-col { display: flex; gap: 12px; }
+.ar-modal .ar-two-col > .ar-row { flex: 1; min-width: 0; }
+.ar-modal .ar-note {
+  font-size: 0.78em;
+  color: #8a6100;
+  background: #fff8e1;
+  border: 1px solid #f5d78e;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 16px;
+}
+.ar-modal .ar-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+.ar-modal .ar-actions button { padding: 9px 20px; }
+.ar-modal .required { color: #e74c3c; }
+
+/* Help widget — floating button + panel */
+.vx-help-fab {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--vx-navy);
+  color: #fff;
+  border: none;
+  font-size: 1.5em;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(15,28,74,0.35);
+  z-index: 900;
+  transition: 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vx-help-fab:hover { background: var(--vx-navy-dark); transform: scale(1.05); }
+
+.vx-help-panel {
+  position: fixed;
+  right: 22px;
+  bottom: 90px;
+  width: 340px;
+  max-width: calc(100vw - 44px);
+  max-height: 70vh;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  z-index: 900;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.vx-help-panel.open { display: flex; }
+.vx-help-header {
+  background: var(--vx-navy);
+  color: #fff;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.vx-help-header h4 { margin: 0; font-size: 0.95em; }
+.vx-help-header button {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.1em;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.vx-help-header button:hover { opacity: 1; }
+.vx-help-body {
+  padding: 12px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+.vx-help-body h5 {
+  font-size: 0.72em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a97ab;
+  margin: 10px 0 6px;
+}
+.vx-faq-item { border-bottom: 1px solid #eef1f6; }
+.vx-faq-q {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 9px 2px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #2c3e50;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.vx-faq-q:hover { color: var(--vx-teal); }
+.vx-faq-a {
+  display: none;
+  padding: 0 2px 10px;
+  font-size: 0.82em;
+  color: #5b6670;
+  line-height: 1.45;
+}
+.vx-faq-item.open .vx-faq-a { display: block; }
+.vx-faq-item.open .vx-faq-caret { transform: rotate(180deg); }
+.vx-faq-caret { transition: 0.15s; font-size: 0.8em; flex-shrink: 0; }
+
+.vx-help-type-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.vx-help-type-btn {
+  flex: 1;
+  background: none;
+  border: 1px solid #dbe1ea;
+  color: #6b7a90;
+  padding: 7px 6px;
+  border-radius: 6px;
+  font-size: 0.78em;
+  font-weight: 600;
+  cursor: pointer;
+}
+.vx-help-type-btn.active {
+  background: var(--vx-navy);
+  border-color: var(--vx-navy);
+  color: #fff;
+}
+
+.vx-help-contact textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #dbe1ea;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+}
+.vx-help-contact select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid #dbe1ea;
+  border-radius: 6px;
+  font-size: 0.85em;
+  margin: 6px 0;
+}
+.vx-help-contact .btn {
+  width: 100%;
+  padding: 9px;
+  font-size: 0.85em;
+  margin-top: 4px;
+}
+.vx-help-msg {
+  font-size: 0.8em;
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-top: 6px;
+  display: none;
+}
+.vx-help-msg.show { display: block; }
+.vx-help-msg--success { background: #d5f5e3; color: #1a7a4a; }
+.vx-help-msg--error { background: #fadbd8; color: #922b21; }
+
+@media (max-width: 480px) {
+  .vx-help-panel { right: 12px; left: 12px; width: auto; bottom: 84px; }
+  .vx-help-fab { right: 14px; bottom: 14px; }
+}
+</style>
+
+<div class="ef-container">
+  <div id="ef-message" class="msg"></div>
+
+  <form id="entryForm">
+
+    <!-- ============================================================
+         SITE OF VACCINATION (with Three-Tier Auto-Correction)
+         ============================================================ -->
+    <h2>SITE OF VACCINATION</h2>
+    <div class="field-group site-first">
+      <div class="form-row">
+        <label for="location">Site of Vaccination *</label>
+        <input type="text" id="location" list="locationOptions" required placeholder="e.g. MTC White Plains - QC" autocomplete="off">
+        <span class="info-icon" id="siteInfoToggle" role="button" tabindex="0" aria-label="Show help">ⓘ</span>
+        <datalist id="locationOptions"></datalist>
+      </div>
+      <div id="siteHelperText" class="ef-helper-tooltip" style="display:none;">
+        Type the province/area after a dash (e.g. "MTC White Plains - QC") so the system can detect it. Pre-filled from your last entry — edit it if you've moved sites.
+      </div>
+      <div id="siteTypoNotice" class="ef-typo-notice"></div>
+    </div>
+
+    <!-- ============================================================
+         RECIPIENT INFORMATION
+         ============================================================ -->
+    <h2>RECIPIENT INFORMATION</h2>
+    <div class="field-group">
+
+      <div class="form-row" style="flex-wrap: wrap; gap: 6px 0;">
+        <label for="recipientSelect" style="width: auto; min-width: 140px;">Recipient Name *</label>
+        <select id="recipientSelect" required style="flex: 2 1 180px; min-width: 120px;">
+          <option value="">-- Select Recipient --</option>
+        </select>
+        <div class="global-search-inline">
+          <span class="search-icon">🔎</span>
+          <input type="text" id="recipientSearch" placeholder="Search all provinces...">
+          <span class="info-icon" id="recipientSearchInfo" role="button" tabindex="0" aria-label="Show search tip">ⓘ</span>
+        </div>
+        <button type="button" class="btn-add-recipient" onclick="efOpenAddRecipientModal()">➕ Add New Recipient</button>
+        <span class="info-icon" id="addRecipientInfo" role="button" tabindex="0" aria-label="Show add recipient tip">ⓘ</span>
+      </div>
+      <div id="recipientSearchHelper" class="ef-helper-tooltip" style="display:none; margin-left: 150px;">
+        💡 <strong>Tip:</strong> The dropdown shows recipients from your current site. Use the search box to find recipients <strong>deployed from other provinces</strong> – it searches EVERYONE in the system.
+      </div>
+      <div id="addRecipientHelper" class="ef-helper-tooltip" style="display:none; margin-left: 150px;">
+        💡 <strong>Tip:</strong> Only use this if the recipient truly isn't in the system yet — check the dropdown and the search box first (including other provinces) so you don't create a duplicate record for someone who's already enrolled.
+      </div>
+      <div id="recipientFilterHelper" class="ef-helper" style="margin-top: 4px;"></div>
+      <div id="recipientLookupIndicator" class="ef-typo-info ef-typo-notice" style="display:none;">🔄 Looking up recipient…</div>
+
+      <div class="form-row"><label>Recipient ID</label><input type="text" id="recipientId" readonly class="readonly"></div>
+      <div class="form-row"><label>Email Address</label><input type="text" id="email" readonly class="readonly"></div>
+      <div class="form-row"><label>Date of Birth</label><input type="text" id="dob" readonly class="readonly"></div>
+      <div class="form-row"><label>Recipient Category</label><input type="text" id="category" readonly class="readonly"></div>
+      <div class="form-row"><label>Company / Organization</label><input type="text" id="company" readonly class="readonly"></div>
+      <div class="form-row"><label>Department / Unit</label><input type="text" id="department" readonly class="readonly"></div>
+    </div>
+
+    <!-- ============================================================
+         DOSE ASSESSMENT & DISPOSITION
+         ============================================================ -->
+    <h2>DOSE ASSESSMENT &amp; DISPOSITION</h2>
+    <div class="field-group">
+      <div class="form-row">
+        <label for="vaccineType">Vaccine Type *</label>
+        <select id="vaccineType" required><option value="">-- Select Vaccine --</option></select>
+      </div>
+      <div class="form-row">
+        <label for="intendedDose">Intended Dose Number *</label>
+        <select id="intendedDose" required><option value="">-- Select Dose --</option></select>
+      </div>
+      <div id="doseHistoryLookupIndicator" class="ef-typo-info ef-typo-notice" style="display:none;">🔄 Checking this recipient's vaccination history for this vaccine…</div>
+      <div id="doseHistoryHint" style="display:none; margin: -4px 0 12px; padding: 8px 12px; border-radius: 6px; background:#eaf6f4; color:#155e56; font-size:0.85em;"></div>
+      <div class="form-row">
+        <label for="doseDisposition">Dose Disposition *</label>
+        <select id="doseDisposition" required>
+          <option value="">-- Select --</option>
+          <option value="Administered">Administered</option>
+          <option value="Deferred">Deferred</option>
+          <option value="Declined">Declined</option>
+          <option value="No-show">No-show</option>
+          <option value="Contraindicated – Temporary">Contraindicated – Temporary</option>
+          <option value="Contraindicated – Permanent">Contraindicated – Permanent</option>
+        </select>
+      </div>
+      <div id="reasonFieldsWrap">
+        <div class="form-row">
+          <label for="reasonCategory">Reason Category</label>
+          <select id="reasonCategory"><option value="">-- Select Category --</option></select>
+        </div>
+        <div class="form-row">
+          <label for="specificReason">Specific Reason</label>
+          <select id="specificReason"><option value="">-- Select Reason --</option></select>
+        </div>
+      </div>
+      <div class="form-row"><label for="statusDate">Status Date</label><input type="date" id="statusDate"></div>
+      <div class="form-row"><label for="reviewDate">Review / Reschedule Date</label><input type="date" id="reviewDate"></div>
+      <div class="btn-row" style="margin-top:4px;">
+        <button type="button" class="btn btn-primary" onclick="efToday()">📅 Today</button>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         VACCINATION DETAILS
+         ============================================================ -->
+    <h2>VACCINATION DETAILS</h2>
+    <div class="field-group">
+      <div class="form-row">
+        <label for="vaccineBrand">Vaccine Brand *</label>
+        <select id="vaccineBrand" required><option value="">-- Select Brand --</option></select>
+      </div>
+      <div class="form-row">
+        <label for="schedule">Schedule *</label>
+        <select id="schedule" required><option value="">-- Select Schedule --</option></select>
+      </div>
+      <div class="form-row"><label for="vaccinationDate">Vaccination Date</label><input type="date" id="vaccinationDate"></div>
+      <div class="form-row"><label for="lotNumber">Lot Number</label><input type="text" id="lotNumber"></div>
+      <div class="form-row"><label for="expiryDate">Expiry Date</label><input type="date" id="expiryDate"></div>
+      <div class="form-row">
+        <label for="adminSite">Administration Site</label>
+        <select id="adminSite">
+          <option value="">-- Select Site --</option>
+          <option value="Left Deltoid">Left Deltoid</option>
+          <option value="Right Deltoid">Right Deltoid</option>
+          <option value="Left Anterolateral Thigh">Left Anterolateral Thigh</option>
+          <option value="Right Anterolateral Thigh">Right Anterolateral Thigh</option>
+          <option value="Other / Clinical Review">Other / Clinical Review</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label for="route">Route of Administration</label>
+        <select id="route">
+          <option value="">-- Select Route --</option>
+          <option value="IM">IM</option>
+          <option value="SC">SC</option>
+          <option value="ID">ID</option>
+          <option value="Oral">Oral</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Site of Vaccination</label><input type="text" id="locationEcho" readonly class="readonly"></div>
+
+      <div class="form-row" style="flex-wrap: wrap; gap: 6px 0; margin-top: 8px;">
+        <label for="vaccinator" style="width: auto; min-width: 140px;">Vaccinator</label>
+        <select id="vaccinator" style="flex: 2 1 180px; min-width: 120px;">
+          <option value="">-- Select Vaccinator --</option>
+        </select>
+        <div class="global-search-inline">
+          <span class="search-icon">🔎</span>
+          <input type="text" id="vaccinatorSearch" placeholder="Search all provinces...">
+          <span class="info-icon" id="vaccinatorSearchInfo" role="button" tabindex="0" aria-label="Show search tip">ⓘ</span>
+        </div>
+      </div>
+      <div id="vaccinatorSearchHelper" class="ef-helper-tooltip" style="display:none; margin-left: 150px;">
+        💡 <strong>Tip:</strong> The dropdown shows vaccinators from your current site. Use the search box to find vaccinators <strong>from other provinces</strong> – it searches EVERYONE in the system.
+      </div>
+      <div id="vaccinatorFilterHelper" class="ef-helper" style="margin-top: 4px;"></div>
+
+      <div class="form-row"><label for="vaccinatorLicense">License Number</label><input type="text" id="vaccinatorLicense" readonly class="readonly"></div>
+      <div class="form-row"><label for="remarks">Remarks</label><textarea id="remarks"></textarea></div>
+    </div>
+
+    <!-- ============================================================
+         FOLLOW-UP & SCHEDULE
+         ============================================================ -->
+    <h2>FOLLOW-UP &amp; SCHEDULE (updates live as you fill out the form above)</h2>
+    <div class="field-group followup">
+      <div class="form-row"><label>Next Dose</label><input type="text" id="nextDose" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
+      <div class="form-row"><label>Recommended Next Dose Date</label><input type="text" id="recommendedDate" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
+      <div class="form-row"><label>Reminder Date</label><input type="text" id="reminderDate" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
+      <div class="form-row"><label>Series Status</label><input type="text" id="seriesStatus" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
+    </div>
+
+    <div class="btn-row">
+      <button type="button" class="btn btn-success" id="saveBtn" onclick="efSubmit()">💾 Save Record</button>
+      <button type="button" class="btn btn-warning" onclick="efClear()">🗑 Clear Form</button>
+    </div>
+  </form>
+</div>
+
+<!-- ============================================================
+     ADD NEW RECIPIENT MODAL — calls the addRecipient()/
+     generateRecipientId_() backend in Code.gs. Collects every
+     Recipients_Master column except column P (Date Added), which the
+     backend sets itself from the actual save moment rather than
+     accepting whatever the encoder might type — see addRecipient's own
+     comments for the full column map.
+     ============================================================ -->
+<div class="ar-modal-overlay" id="arModalOverlay">
+  <div class="ar-modal">
+    <h3>➕ Add New Recipient</h3>
+    <p class="ar-sub">This creates a permanent new row in Recipients_Master with an auto-generated Recipient ID. Double-check spelling before saving — recipient records aren't meant to be deleted afterward.</p>
+    <div class="ar-note">Assigned Site/Location below is only used to sort this recipient into the right province bucket for the dropdown — it isn't shown anywhere else in this app.</div>
+
+    <div class="ar-row">
+      <label for="arEmployeeId">Employee / Client ID</label>
+      <input type="text" id="arEmployeeId" autocomplete="off">
+    </div>
+    <div class="ar-two-col">
+      <div class="ar-row">
+        <label for="arLastName">Last Name <span class="required">*</span></label>
+        <input type="text" id="arLastName" autocomplete="off">
+      </div>
+      <div class="ar-row">
+        <label for="arFirstName">First Name <span class="required">*</span></label>
+        <input type="text" id="arFirstName" autocomplete="off">
+      </div>
+    </div>
+    <div class="ar-row">
+      <label for="arMiddleName">Middle Name</label>
+      <input type="text" id="arMiddleName" autocomplete="off">
+    </div>
+    <div class="ar-two-col">
+      <div class="ar-row">
+        <label for="arDob">Date of Birth</label>
+        <input type="date" id="arDob">
+      </div>
+      <div class="ar-row">
+        <label for="arSex">Sex</label>
+        <select id="arSex">
+          <option value="">-- Select --</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+        </select>
+      </div>
+    </div>
+    <div class="ar-two-col">
+      <div class="ar-row">
+        <label for="arCategory">Recipient Category</label>
+        <input type="text" id="arCategory" placeholder="e.g. Employee" autocomplete="off">
+      </div>
+      <div class="ar-row">
+        <label for="arCompany">Company / Organization</label>
+        <input type="text" id="arCompany" autocomplete="off">
+      </div>
+    </div>
+    <div class="ar-two-col">
+      <div class="ar-row">
+        <label for="arDept">Department / Unit</label>
+        <input type="text" id="arDept" autocomplete="off">
+      </div>
+      <div class="ar-row">
+        <label for="arDeptId">Department / Unit ID</label>
+        <input type="text" id="arDeptId" autocomplete="off">
+      </div>
+    </div>
+    <div class="ar-row">
+      <label for="arAssignedSite">Assigned Site/Location</label>
+      <input type="text" id="arAssignedSite" placeholder="e.g. MTC White Plains - QC" autocomplete="off">
+    </div>
+    <div class="ar-two-col">
+      <div class="ar-row">
+        <label for="arEmail">Email Address</label>
+        <input type="text" id="arEmail" autocomplete="off">
+      </div>
+      <div class="ar-row">
+        <label for="arMobile">Mobile Number</label>
+        <input type="text" id="arMobile" autocomplete="off">
+      </div>
+    </div>
+    <div class="ar-row">
+      <label for="arEnrollmentSource">Enrollment Source</label>
+      <input type="text" id="arEnrollmentSource" placeholder="e.g. Walk-in, HR Onboarding" autocomplete="off">
+    </div>
+    <div class="ar-row">
+      <label for="arRemarks">Remarks</label>
+      <textarea id="arRemarks" rows="2" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #dbe1ea; border-radius:6px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+    </div>
+
+    <div id="arModalMsg" class="msg" style="display:none;"></div>
+
+    <div class="ar-actions">
+      <button type="button" class="btn btn-warning" onclick="efCloseAddRecipientModal()">Cancel</button>
+      <button type="button" class="btn btn-success" id="arSaveBtn" onclick="efSubmitAddRecipient()">💾 Save Recipient</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     HELP WIDGET — floating button, common-issues FAQ, and a
+     "Contact IT Support" fallback that calls the backend's
+     submitVxSyncHelpTicket() (server-to-server into the Hub's ticket
+     inbox, tagged source: 'vxsync' — see api_index.ts/VxSyncCode.gs).
+     FAQ content below is drafted from real friction points already
+     built into this form (dose locking, site typo correction, duplicate-
+     name checks, lot number/route warnings) — edit freely, this isn't
+     sheet-driven, just a plain array in the script below.
+     ============================================================ -->
+<button type="button" class="vx-help-fab" id="vxHelpFab" onclick="vxToggleHelpPanel()" aria-label="Help">❓</button>
+
+<div class="vx-help-panel" id="vxHelpPanel">
+  <div class="vx-help-header">
+    <h4>Need Help?</h4>
+    <button type="button" onclick="vxToggleHelpPanel()" aria-label="Close">✕</button>
+  </div>
+  <div class="vx-help-body">
+    <h5>Common Issues</h5>
+    <div id="vxFaqList"></div>
+
+    <h5>Still stuck?</h5>
+    <div class="vx-help-type-toggle">
+      <button type="button" class="vx-help-type-btn active" id="vxHelpTypeBtnHelp" onclick="vxSetHelpTicketType('help')">❓ General Question</button>
+      <button type="button" class="vx-help-type-btn" id="vxHelpTypeBtnBug" onclick="vxSetHelpTicketType('bug')">🐛 Report a Bug</button>
+    </div>
+    <div class="vx-help-contact">
+      <textarea id="vxHelpMessage" placeholder="Describe the issue you're running into..."></textarea>
+      <select id="vxHelpPriority">
+        <option value="normal">Priority: Normal</option>
+        <option value="low">Priority: Low</option>
+        <option value="high">Priority: High</option>
+        <option value="urgent">Priority: Urgent</option>
+      </select>
+      <button type="button" class="btn btn-primary" id="vxHelpSubmitBtn" onclick="vxSubmitHelpTicket()">📨 Contact IT Support</button>
+      <div id="vxHelpMsg" class="vx-help-msg"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var efSelectedRecipient = null;
+  var efDispositions = [];
+  var efAllRecipients = [];
+  var efAllVaccinators = [];
+  var efCurrentProvince = '';
+
+  function efPad(n) { return String(n).padStart(2, '0'); }
+  function efLocalDateStr(d) { return d.getFullYear() + '-' + efPad(d.getMonth() + 1) + '-' + efPad(d.getDate()); }
+
+  function efUnlockDoseField() {
+    document.getElementById('intendedDose').disabled = false;
+  }
+  function efLockDoseField() {
+    document.getElementById('intendedDose').disabled = true;
+  }
+
+  function setupInfoToggle(toggleId, helperId) {
+    var toggle = document.getElementById(toggleId);
+    var helper = document.getElementById(helperId);
+    if (!toggle || !helper) return;
+    toggle.addEventListener('click', function(e) {
+      e.stopPropagation();
+      helper.style.display = (helper.style.display === 'none') ? 'block' : 'none';
+    });
+    toggle.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.click();
+      }
+    });
+  }
+
+  // ============================================================
+  // INIT
+  // ============================================================
+  (function efInit() {
+    efShowMessage('Loading data...', 'success');
+    efLoadSite();
+    efLoadRecipients();
+    efLoadVaccineTypes();
+    efLoadVaccinators();
+    efLoadDispositions();
+    efPopulateDoseOptions();
+    efUpdateReasonVisibility('');
+    var now = new Date();
+    document.getElementById('statusDate').value = efLocalDateStr(now);
+    document.getElementById('vaccinationDate').value = efLocalDateStr(now);
+    setupInfoToggle('siteInfoToggle', 'siteHelperText');
+    setupInfoToggle('recipientSearchInfo', 'recipientSearchHelper');
+    setupInfoToggle('addRecipientInfo', 'addRecipientHelper');
+    setupInfoToggle('vaccinatorSearchInfo', 'vaccinatorSearchHelper');
+  })();
+
+  // ============================================================
+  // SITE OF VACCINATION (with Three-Tier Auto-Correction)
+  // ============================================================
+  function efLoadSite() {
+    var locationInput = document.getElementById('location');
+    var datalist = document.getElementById('locationOptions');
+
+    google.script.run
+      .withSuccessHandler(function (sites) {
+        datalist.innerHTML = '';
+        (sites || []).forEach(function (s) {
+          var opt = document.createElement('option');
+          opt.value = s;
+          datalist.appendChild(opt);
+        });
+      })
+      .withFailureHandler(function (err) { efShowMessage('ERROR loading known sites: ' + err.message, 'error'); })
+      .getKnownSites();
+
+          google.script.run
+        .withSuccessHandler(function (site) {
+          // Site of Vaccination is now cleared on every page load.
+          // This prevents prefilling from the last session.
+          locationInput.value = '';
+          efEchoLocation();
+          efUpdateProvinceContext();
+        })
+        .withFailureHandler(function (err) { efShowMessage('ERROR loading your last site: ' + err.message, 'error'); })
+        .getEncodingSite();
+  }
+
+  function efEchoLocation() {
+    document.getElementById('locationEcho').value = document.getElementById('location').value;
+  }
+
+  function efUpdateProvinceContext() {
+    var site = document.getElementById('location').value;
+    if (!site) {
+      efCurrentProvince = '';
+      efRenderRecipientOptions();
+      efRenderVaccinatorOptions();
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (province) {
+        efCurrentProvince = province || '';
+        efRenderRecipientOptions();
+        efRenderVaccinatorOptions();
+      })
+      .withFailureHandler(function () { /* non-critical */ })
+      .getProvinceForSite(site);
+  }
+
+  document.getElementById('location').addEventListener('input', efEchoLocation);
+  document.getElementById('location').addEventListener('change', efUpdateProvinceContext);
+
+  // ---- THREE-TIER AUTO-CORRECTION (on blur) ----
+  // checkSiteTypo now checks WORD BY WORD server-side (see checkTypoMultiWord_
+  // in Code.gs) and returns { correctedValue, autoCorrections: [...],
+  // suggestions: [...] } instead of one whole-phrase correction/suggestion —
+  // so the notice below only ever names the specific word(s) that looked
+  // mistyped, never a wholesale phrase swap.
+  document.getElementById('location').addEventListener('blur', function () {
+    var val = this.value;
+    if (!val) {
+      efHideSiteNotice();
+      return;
+    }
+    var self = this;
+    // Visible "checking" state while this reads Vaccination_Tracker's
+    // history for known site spellings — otherwise the round trip is
+    // invisible and it looks like nothing happened until it resolves.
+    efShowSiteNotice('🔄 Checking site spelling against known sites…', 'info');
+    google.script.run
+      .withSuccessHandler(function (result) {
+        if (!result || result.tier === 0) {
+          efHideSiteNotice();
+          return;
+        }
+
+        var noticeParts = [];
+
+        // Tier 1/2 words: auto-applied silently — visually flagged with a
+        // distinct "auto-corrected" (green ✓) style so it's unmistakably
+        // different from a mere suggestion.
+        if (result.correctedValue) {
+          self.value = result.correctedValue;
+          efEchoLocation();
+          efUpdateProvinceContext();
+          var fixList = (result.autoCorrections || []).map(function (c) {
+            return '"' + efEsc(c.original) + '" → "' + efEsc(c.corrected) + '"';
+          }).join(', ');
+          noticeParts.push('✓ Auto-corrected ' + fixList);
+        }
+
+        // Tier 3 words: suggestion only, phrase left exactly as typed —
+        // visually flagged with the amber "you may want to check this"
+        // style, distinct from the auto-corrected one above.
+        if (result.suggestions && result.suggestions.length) {
+          var sugList = result.suggestions.map(function (s) {
+            return 'did you mean "' + efEsc(s.suggestion) + '" instead of "' + efEsc(s.original) + '"?';
+          }).join(' ');
+          noticeParts.push('💡 ' + sugList + ' You can still save as typed.');
+        }
+
+        if (!noticeParts.length) { efHideSiteNotice(); return; }
+
+        // If a suggestion is still pending, use the amber style even when
+        // part of the phrase was also auto-corrected — there's still
+        // something for the encoder to double-check either way.
+        var kind = (result.suggestions && result.suggestions.length) ? 'warn' : 'auto';
+        efShowSiteNotice(noticeParts.join('  '), kind);
+      })
+      .withFailureHandler(function (err) {
+        // Non-critical – never block the encoder, but don't leave the
+        // "Checking…" indicator stuck on screen forever either.
+        efHideSiteNotice();
+        console.warn('checkSiteTypo failed:', err);
+      })
+      .checkSiteTypo(val);
+  });
+
+  function efShowSiteNotice(text, kind) {
+    var el = document.getElementById('siteTypoNotice');
+    el.textContent = text;
+    el.className = 'ef-typo-notice ef-typo-' + kind;
+    el.style.display = 'block';
+  }
+
+  function efHideSiteNotice() {
+    document.getElementById('siteTypoNotice').style.display = 'none';
+  }
+
+  // ============================================================
+  // RECIPIENTS
+  // ============================================================
+  function efLoadRecipients() {
+    google.script.run
+      .withSuccessHandler(function (recipients) {
+        efAllRecipients = recipients || [];
+        if (efAllRecipients.length === 0) {
+          efShowMessage('No active recipients found. Please add recipients to Recipients_Master.', 'error');
+        } else {
+          efHideMessage();
+        }
+        efRenderRecipientOptions();
+      })
+      .withFailureHandler(function (err) {
+        efShowMessage('ERROR loading recipients: ' + err.message, 'error');
+      })
+      .getRecipients();
+  }
+
+  function efRenderRecipientOptions() {
+    var select = document.getElementById('recipientSelect');
+    var searchText = document.getElementById('recipientSearch').value.trim().toLowerCase();
+    var previousValue = select.value;
+    var filtered;
+
+    if (searchText) {
+      filtered = efAllRecipients.filter(function (r) { return r.name.toLowerCase().indexOf(searchText) !== -1; });
+    } else if (efCurrentProvince) {
+      filtered = efAllRecipients.filter(function (r) { return r.province === efCurrentProvince; });
+    } else {
+      filtered = efAllRecipients;
+    }
+
+    select.innerHTML = '<option value="">-- Select Recipient --</option>';
+    filtered.forEach(function (r) {
+      var opt = document.createElement('option');
+      opt.value = r.id;
+      opt.text = r.name + (r.province ? ' (' + r.province + ')' : '');
+      select.appendChild(opt);
+    });
+
+    if (previousValue && !filtered.some(function (r) { return String(r.id) === previousValue; })) {
+      var stillExists = efAllRecipients.filter(function (r) { return String(r.id) === previousValue; })[0];
+      if (stillExists) {
+        var opt = document.createElement('option');
+        opt.value = stillExists.id;
+        opt.text = stillExists.name + ' (currently selected)';
+        select.appendChild(opt);
+      }
+    }
+    select.value = previousValue;
+
+    var helper = document.getElementById('recipientFilterHelper');
+    if (searchText) {
+      helper.textContent = filtered.length + ' match(es) for "' + searchText + '" across all provinces.';
+    } else if (efCurrentProvince) {
+      helper.textContent = 'Showing ' + filtered.length + ' recipient(s) in ' + efCurrentProvince + '. Use the 🔎 search box to find recipients from other provinces.';
+    } else {
+      helper.textContent = 'Showing all ' + filtered.length + ' recipient(s) — enter Site of Vaccination above to filter by province.';
+    }
+  }
+
+  document.getElementById('recipientSearch').addEventListener('input', efRenderRecipientOptions);
+
+  // Recipient lookup is an async round trip to the sheet (getRecipientDetails),
+  // not instant — while it's in flight: (1) show a visible "looking up"
+  // indicator instead of the form silently doing nothing, (2) lock JUST the
+  // recipient select + search box so a second click during the fetch can't
+  // fire an overlapping lookup / select a different recipient mid-fetch,
+  // and (3) leave every OTHER field on the form (vaccine type, dose, etc.)
+  // fully editable — an encoder shouldn't be blocked from getting ahead on
+  // the rest of the form while this one lookup resolves. If no record comes
+  // back (shouldn't normally happen, since the dropdown is itself sourced
+  // from Recipients_Master, but a deleted/deactivated recipient between
+  // page load and selection is possible), the prefill fields are cleared
+  // and the select/search are unlocked immediately so a different
+  // recipient can be chosen right away.
+  function efSetRecipientLookupLocked(locked) {
+    document.getElementById('recipientSelect').disabled = locked;
+    document.getElementById('recipientSearch').disabled = locked;
+    document.getElementById('recipientLookupIndicator').style.display = locked ? 'block' : 'none';
+  }
+
+  document.getElementById('recipientSelect').addEventListener('change', function () {
+    var id = this.value;
+    var gen = ++efGen; // new recipient — invalidate any dose-history/brand/schedule lookup still in flight for the previous one
+    if (!id) { efClearRecipientFields(); efResetDoseHistoryState(); return; }
+    efSetRecipientLookupLocked(true);
+    google.script.run
+      .withSuccessHandler(function (details) {
+        if (gen !== efGen) return; // superseded — recipientSelect is locked during this fetch, but guard anyway for consistency
+        efSetRecipientLookupLocked(false);
+        if (details) {
+          efSelectedRecipient = details;
+          document.getElementById('recipientId').value = details.id;
+          document.getElementById('email').value = details.email;
+          document.getElementById('dob').value = details.dob;
+          document.getElementById('category').value = details.category;
+          document.getElementById('company').value = details.company;
+          document.getElementById('department').value = details.dept;
+          efCheckDoseHistory();
+        } else {
+          // Not found (e.g. recipient deactivated between page load and
+          // selection) — clear stale prefill rather than leaving the
+          // PREVIOUS recipient's details on screen attached to a new
+          // selection, tell the encoder plainly, and reset the dropdown
+          // so nothing invalid stays "selected."
+          efClearRecipientFields();
+          efResetDoseHistoryState();
+          document.getElementById('recipientSelect').value = '';
+          efShowMessage('That recipient could not be found — they may have been deactivated. Please select another.', 'error');
+        }
+      })
+      .withFailureHandler(function (err) {
+        efSetRecipientLookupLocked(false);
+        efShowMessage('ERROR loading recipient details: ' + err.message, 'error');
+      })
+      .getRecipientDetails(id);
+  });
+
+  function efClearRecipientFields() {
+    ['recipientId', 'email', 'dob', 'category', 'company', 'department'].forEach(function (id) {
+      document.getElementById(id).value = '';
+    });
+    efSelectedRecipient = null;
+  }
+
+  // ============================================================
+  // ADD NEW RECIPIENT MODAL
+  // ============================================================
+  var arModalFieldIds = [
+    'arEmployeeId', 'arLastName', 'arFirstName', 'arMiddleName', 'arDob', 'arSex',
+    'arCategory', 'arCompany', 'arDept', 'arDeptId', 'arAssignedSite', 'arEmail', 'arMobile',
+    'arEnrollmentSource', 'arRemarks'
+  ];
+  var arPendingDuplicateFields = null; // set while a duplicate warning is showing and awaiting confirmation
+
+  function efOpenAddRecipientModal() {
+    arModalFieldIds.forEach(function (id) { document.getElementById(id).value = ''; });
+    document.getElementById('arModalMsg').style.display = 'none';
+    arPendingDuplicateFields = null;
+    document.getElementById('arSaveBtn').textContent = '💾 Save Recipient';
+    // Pre-fill Assigned Site/Location from whatever Site of Vaccination the
+    // encoder already typed above — the new recipient is almost always
+    // being added at the encoder's own current site, so this saves a
+    // retype in the common case without locking the field.
+    var currentSite = document.getElementById('location').value.trim();
+    if (currentSite) document.getElementById('arAssignedSite').value = currentSite;
+    document.getElementById('arModalOverlay').classList.add('open');
+    document.getElementById('arLastName').focus();
+  }
+
+  function efCloseAddRecipientModal() {
+    document.getElementById('arModalOverlay').classList.remove('open');
+  }
+
+  document.getElementById('arModalOverlay').addEventListener('click', function (e) {
+    if (e.target === this) efCloseAddRecipientModal();
+  });
+
+  function efShowAddRecipientMsg(text, type) {
+    var el = document.getElementById('arModalMsg');
+    el.textContent = text;
+    el.className = 'msg msg-' + type;
+    el.style.display = 'block';
+  }
+
+  function efSubmitAddRecipient() {
+    // If a duplicate warning is currently showing, this click means "yes,
+    // add anyway" — resubmit the SAME fields captured the first time
+    // (not re-read from the form) with confirmDuplicate:true, so what
+    // gets saved is exactly what was shown in the warning.
+    if (arPendingDuplicateFields) {
+      efSaveRecipientFields_(arPendingDuplicateFields);
+      return;
+    }
+
+    var lastName = document.getElementById('arLastName').value.trim();
+    var firstName = document.getElementById('arFirstName').value.trim();
+    if (!lastName || !firstName) {
+      efShowAddRecipientMsg('Last name and first name are required.', 'error');
+      return;
+    }
+
+    var fields = {
+      employeeId: document.getElementById('arEmployeeId').value.trim(),
+      lastName: lastName,
+      firstName: firstName,
+      middleName: document.getElementById('arMiddleName').value.trim(),
+      dob: document.getElementById('arDob').value,
+      sex: document.getElementById('arSex').value.trim(),
+      category: document.getElementById('arCategory').value.trim(),
+      company: document.getElementById('arCompany').value.trim(),
+      dept: document.getElementById('arDept').value.trim(),
+      deptId: document.getElementById('arDeptId').value.trim(),
+      assignedSite: document.getElementById('arAssignedSite').value.trim(),
+      email: document.getElementById('arEmail').value.trim(),
+      mobile: document.getElementById('arMobile').value.trim(),
+      enrollmentSource: document.getElementById('arEnrollmentSource').value.trim(),
+      remarks: document.getElementById('arRemarks').value.trim()
+    };
+    efSaveRecipientFields_(fields);
+  }
+
+  function efSaveRecipientFields_(fields) {
+    var saveBtn = document.getElementById('arSaveBtn');
+    saveBtn.disabled = true;
+    // Explicit about what's happening — this round trip checks
+    // Recipients_Master for an existing same-name record before it saves,
+    // not just a plain write, so the button should say so rather than
+    // leaving that lookup invisible.
+    saveBtn.textContent = fields.confirmDuplicate ? 'Saving…' : 'Checking existing records…';
+
+    google.script.run
+      .withSuccessHandler(function (result) {
+        saveBtn.disabled = false;
+        if (!result || !result.success) {
+          if (result && result.duplicate) {
+            // Backend found an existing recipient with the same name (see
+            // findDuplicateRecipientNames_ in Code.gs) and refused to save
+            // without confirmation. Show who it matched and let the
+            // encoder decide — they may genuinely be two different people.
+            arPendingDuplicateFields = fields;
+            arPendingDuplicateFields.confirmDuplicate = true;
+            var list = result.matches.map(function (m) {
+              return m.name + ' (' + m.id + (m.company ? ', ' + m.company : '') + (m.dept ? ', ' + m.dept : '') + ')';
+            }).join('; ');
+            efShowAddRecipientMsg(
+              '⚠️ A recipient with this exact name already exists: ' + list +
+              '. If this is a different person, click "Add Anyway" to save it as a new recipient. Otherwise, cancel and select the existing one from the dropdown instead.',
+              'error'
+            );
+            saveBtn.textContent = '⚠️ Add Anyway';
+            return;
+          }
+          saveBtn.textContent = '💾 Save Recipient';
+          efShowAddRecipientMsg('Could not save this recipient.', 'error');
+          return;
+        }
+        saveBtn.textContent = '💾 Save Recipient';
+        arPendingDuplicateFields = null;
+        efCloseAddRecipientModal();
+        efShowMessage('New recipient added: ' + result.name + ' (' + result.recipientId + ').', 'success');
+        // Reload the full recipient list from the sheet (rather than just
+        // splicing this one in locally) so province filtering / search stay
+        // consistent with what's actually in Recipients_Master, then
+        // auto-select the new recipient and run the SAME details lookup
+        // the dropdown's own change handler uses — reusing that path
+        // instead of re-deriving the readonly fields here keeps this
+        // guaranteed consistent with a normal recipient selection.
+        google.script.run
+          .withSuccessHandler(function (recipients) {
+            efAllRecipients = recipients || [];
+            efRenderRecipientOptions();
+            var select = document.getElementById('recipientSelect');
+            select.value = result.recipientId;
+            if (select.value !== String(result.recipientId)) {
+              // Not in the current province/search filter view — add it
+              // explicitly so it's still selectable immediately.
+              var opt = document.createElement('option');
+              opt.value = result.recipientId;
+              opt.text = result.name + ' (just added)';
+              select.appendChild(opt);
+              select.value = result.recipientId;
+            }
+            select.dispatchEvent(new Event('change'));
+          })
+          .withFailureHandler(function (err) {
+            efShowMessage('Recipient saved, but the list could not be refreshed: ' + err.message + '. Reload the page to select them.', 'error');
+          })
+          .getRecipients();
+      })
+      .withFailureHandler(function (err) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Recipient';
+        efShowAddRecipientMsg('ERROR: ' + err.message, 'error');
+      })
+      .addRecipient(fields);
+  }
+
+  // ============================================================
+  // VACCINE TYPES / BRANDS / SCHEDULES
+  // ============================================================
+  function efLoadVaccineTypes() {
+    google.script.run
+      .withSuccessHandler(function (types) {
+        var select = document.getElementById('vaccineType');
+        select.innerHTML = '<option value="">-- Select Vaccine --</option>';
+        if (!types || types.length === 0) {
+          efShowMessage('No vaccine types found. Please check Vaccine_Schedule_Master.', 'error');
+          return;
+        }
+        types.forEach(function (t) {
+          var opt = document.createElement('option');
+          opt.value = t; opt.text = t;
+          select.appendChild(opt);
+        });
+        efHideMessage();
+      })
+      .withFailureHandler(function (err) { efShowMessage('ERROR loading vaccine types: ' + err.message, 'error'); })
+      .getVaccineTypes();
+  }
+
+  document.getElementById('vaccineType').addEventListener('change', function () {
+    var type = this.value;
+    ++efGen; // invalidate any lookup still in flight from the previous vaccine type
+    efResetDoseHistoryState();
+    efUnlockDoseField();
+    if (!type) { efClearBrands(); return; }
+    efCheckDoseHistory(); // bumps efGen again for its own chain
+  });
+
+  function efLoadBrandsPlain(type, preselectBrand, preselectSchedule, gen) {
+    if (gen === undefined) gen = ++efGen; // called directly (manual vaccine-type pick with no history chain) — still needs its own generation
+    google.script.run
+      .withSuccessHandler(function (brands) {
+        if (gen !== efGen) return; // a newer selection has since superseded this lookup
+        var select = document.getElementById('vaccineBrand');
+        select.innerHTML = '<option value="">-- Select Brand --</option>';
+        if (!brands || brands.length === 0) { efShowMessage('No brands found for this vaccine type.', 'error'); return; }
+        brands.forEach(function (b) {
+          var opt = document.createElement('option');
+          opt.value = b; opt.text = b;
+          select.appendChild(opt);
+        });
+        efHideMessage();
+        if (preselectBrand) {
+          if (brands.indexOf(preselectBrand) === -1) {
+            var opt = document.createElement('option');
+            opt.value = preselectBrand; opt.text = preselectBrand + ' (last used — you can pick a different brand below)';
+            select.appendChild(opt);
+          }
+          select.value = preselectBrand; // prefilled ONLY — select stays a normal, fully editable dropdown
+          efLoadSchedulesPlain(type, preselectBrand, preselectSchedule, gen);
+        }
+      })
+      .withFailureHandler(function (err) { if (gen === efGen) efShowMessage('ERROR loading brands: ' + err.message, 'error'); })
+      .getBrands(type);
+  }
+
+  function efLoadSchedulesPlain(type, brand, preselectSchedule, gen) {
+    if (gen === undefined) gen = efGen;
+    google.script.run
+      .withSuccessHandler(function (schedules) {
+        if (gen !== efGen) return;
+        var select = document.getElementById('schedule');
+        select.innerHTML = '<option value="">-- Select Schedule --</option>';
+        if (!schedules || schedules.length === 0) { efShowMessage('No schedules found for this brand.', 'error'); return; }
+        schedules.forEach(function (s) {
+          var opt = document.createElement('option');
+          opt.value = s; opt.text = s;
+          select.appendChild(opt);
+        });
+        efHideMessage();
+        if (preselectSchedule) {
+          if (schedules.indexOf(preselectSchedule) === -1) {
+            var opt = document.createElement('option');
+            opt.value = preselectSchedule; opt.text = preselectSchedule + ' (last used)';
+            select.appendChild(opt);
+          }
+          select.value = preselectSchedule;
+        }
+        efUpdateFollowUpPreview();
+      })
+      .withFailureHandler(function (err) { if (gen === efGen) efShowMessage('ERROR loading schedules: ' + err.message, 'error'); })
+      .getSchedules(type, brand);
+  }
+
+  document.getElementById('vaccineBrand').addEventListener('change', function () {
+    var type = document.getElementById('vaccineType').value;
+    var brand = this.value;
+    var gen = ++efGen; // encoder is manually overriding brand — invalidate any in-flight schedule/dose lookup tied to the previous brand
+    if (!type || !brand) { efClearSchedules(); return; }
+    efLoadSchedulesPlain(type, brand, null, gen);
+  });
+
+  document.getElementById('schedule').addEventListener('change', function () {
+    var type = document.getElementById('vaccineType').value;
+    var brand = document.getElementById('vaccineBrand').value;
+    var schedule = this.value;
+    var gen = ++efGen; // new schedule choice — invalidate any in-flight starting-dose lookup tied to the previous one
+    if (!type || !brand || !schedule || efHasHistory) { efUpdateFollowUpPreview(); return; }
+    efSetDoseLookupIndicator(true);
+    efLockDoseField(); // locked WHILE looking up too — nothing to pick yet until this resolves
+    google.script.run
+      .withSuccessHandler(function (info) {
+        if (gen !== efGen) return; // superseded by a newer brand/schedule/type change
+        efSetDoseLookupIndicator(false);
+        if (info && info.label) {
+          var select = document.getElementById('intendedDose');
+          var hasOption = Array.prototype.some.call(select.options, function (o) { return o.value === info.label; });
+          if (hasOption) select.value = info.label;
+          efShowHint('No prior "Administered" record found for this recipient/vaccine — pre-filled starting dose "' + efEsc(info.label) + '" per Vaccine_Schedule_Master — locked to prevent accidental changes. If the recipient was already vaccinated elsewhere, unlock/correct it manually.');
+          // Locked, same as the history-found path (efApplyDoseHistory)
+          // below — a confidently-derived starting dose shouldn't be any
+          // easier to accidentally overwrite than a history-derived one.
+          efLockDoseField();
+        } else {
+          efUnlockDoseField();
+        }
+        efUpdateFollowUpPreview();
+      })
+      .withFailureHandler(function () {
+        if (gen !== efGen) return;
+        efSetDoseLookupIndicator(false);
+        efUnlockDoseField();
+        efUpdateFollowUpPreview();
+      })
+      .getStartingDoseInfo(type, brand, schedule);
+  });
+
+  function efClearBrands() { document.getElementById('vaccineBrand').innerHTML = '<option value="">-- Select Brand --</option>'; efClearSchedules(); }
+  function efClearSchedules() { document.getElementById('schedule').innerHTML = '<option value="">-- Select Schedule --</option>'; }
+
+  // ============================================================
+  // DOSE HISTORY
+  // ============================================================
+  var efHasHistory = false;
+
+  // Bumped every time the user changes recipient, vaccine type, or brand —
+  // i.e. every time a NEW async lookup chain (dose history -> brand ->
+  // schedule -> starting-dose) is kicked off. Every callback in that chain
+  // captures the generation it was started with and checks it against the
+  // live efGen before touching the DOM. This is the fix for the "sheet
+  // ends up with a different value than what was on screen" bug: without
+  // it, a slow/late response from an OLDER selection (e.g. the encoder
+  // picked vaccine type A, then quickly changed their mind to type B
+  // before A's lookup finished) could land after the newer one and
+  // silently overwrite Brand/Schedule/Admin Site/Route/Dose with stale
+  // data for a vaccine type that no longer matches what's visibly
+  // selected — which is then what gets submitted to the sheet.
+  var efGen = 0;
+
+  function efResetDoseHistoryState() {
+    efHasHistory = false;
+    efHideHint();
+    efUnlockDoseField();
+  }
+
+  function efPopulateDoseOptions(selectedValue, gen) {
+    if (gen === undefined) gen = efGen; // called directly at page init/reset, not as part of a tracked lookup chain
+    var select = document.getElementById('intendedDose');
+    google.script.run
+      .withSuccessHandler(function (doses) {
+        if (gen !== efGen) return; // a newer selection has since superseded this lookup
+        select.innerHTML = '<option value="">-- Select Dose --</option>';
+        (doses || []).forEach(function (d) {
+          var opt = document.createElement('option');
+          opt.value = d; opt.text = d;
+          select.appendChild(opt);
+        });
+        if (selectedValue) select.value = selectedValue;
+        efUnlockDoseField();
+      })
+      .withFailureHandler(function (err) { if (gen === efGen) efShowMessage('ERROR loading dose numbers: ' + err.message, 'error'); })
+      .getDoseNumbers();
+  }
+
+  // Locks/shows-or-hides the "checking history" indicator AND the dose
+  // field together — while the lookup is in flight there is genuinely
+  // nothing valid to prefill yet, so the dose field stays locked (not
+  // just visually "loading") until the lookup resolves one way or the
+  // other. This is what was missing before: the round trip to
+  // Vaccination_Tracker was invisible, so an encoder had no way to tell
+  // "still checking" apart from "checked, nothing to prefill."
+  function efSetDoseLookupIndicator(active) {
+    document.getElementById('doseHistoryLookupIndicator').style.display = active ? 'block' : 'none';
+  }
+
+  function efCheckDoseHistory() {
+    var recipientId = document.getElementById('recipientSelect').value;
+    var vaccineType = document.getElementById('vaccineType').value;
+    var gen = ++efGen; // this is a brand-new lookup chain — invalidate anything still in flight
+    efResetDoseHistoryState();
+    if (!recipientId || !vaccineType) { efClearBrands(); return; }
+    efSetDoseLookupIndicator(true);
+    efLockDoseField();
+    google.script.run
+      .withSuccessHandler(function (hist) {
+        if (gen !== efGen) return; // superseded — do not touch the DOM with stale results
+        efSetDoseLookupIndicator(false);
+        if (hist && hist.hasHistory) {
+          efApplyDoseHistory(hist, gen);
+        } else {
+          // No existing record for this recipient/vaccine — per client
+          // instruction, prefill the starting dose (Dose 1, or whatever
+          // Vaccine_Schedule_Master says for this vaccine's schedule) as
+          // soon as brand+schedule are picked (see the 'schedule' change
+          // handler's getStartingDoseInfo call below) and lock it there,
+          // same as a history-derived prefill. Brand/schedule themselves
+          // are NOT preselected here since there's no prior record to
+          // base a suggestion on — the encoder picks those, and the dose
+          // suggestion follows from that choice. Administration Site /
+          // Route are reset to blank too — a value prefilled from a
+          // PREVIOUS vaccine type's history shouldn't linger and look like
+          // a suggestion for this different vaccine that has no history.
+          efLoadBrandsPlain(vaccineType, null, null, gen);
+          efPopulateDoseOptions(null, gen);
+          efUnlockDoseField();
+          document.getElementById('adminSite').value = '';
+          document.getElementById('route').value = '';
+          // No recipient history to prefill Route from — fall back to a
+          // best-effort hint from this vaccine TYPE's own Schedule Notes
+          // (Vaccine_Schedule_Master col T), when one exists unambiguously.
+          // Admin Site has no equivalent source (see getRouteHintForVaccine
+          // in Code.gs for why) so it stays blank here.
+          efApplyVaccineTypeRouteHint(vaccineType, gen);
+        }
+      })
+      .withFailureHandler(function (err) {
+        if (gen !== efGen) return;
+        efSetDoseLookupIndicator(false);
+        efShowMessage('ERROR checking vaccination history: ' + err.message, 'error');
+        efLoadBrandsPlain(vaccineType, null, null, gen);
+        efPopulateDoseOptions(null, gen);
+        efUnlockDoseField();
+      })
+      .getRecipientVaccineHistory(recipientId, vaccineType);
+  }
+
+  // Prefills a <select> with a value from history, adding it as an extra
+  // option first if it isn't already one of the fixed choices (same
+  // pattern efLoadBrandsPlain/efLoadSchedulesPlain already use for
+  // Brand/Schedule) — WITHOUT disabling the field. Used for Administration
+  // Site and Route of Administration: per client instruction, these
+  // should follow the recipient's last dose as a starting point (common
+  // practice), but must stay editable since inventory availability can
+  // mean a different site/route is actually used this time even though it
+  // was consistent before.
+  function efPrefillSelectValue(selectId, value) {
+    if (!value) return;
+    var select = document.getElementById(selectId);
+    var hasOption = Array.prototype.some.call(select.options, function (o) { return o.value === value; });
+    if (!hasOption) {
+      var opt = document.createElement('option');
+      opt.value = value; opt.text = value + ' (last used)';
+      select.appendChild(opt);
+    }
+    select.value = value;
+  }
+
+  // Best-effort Route of Administration hint sourced from the vaccine
+  // TYPE's own Schedule Notes (Vaccine_Schedule_Master col T), for when
+  // there's no recipient-history route to prefill from yet. See
+  // getRouteHintForVaccine in Code.gs — it only ever returns a route when
+  // Schedule Notes unambiguously say one, never a guess. Never overrides
+  // a value that's already there (e.g. from recipient history, or the
+  // encoder already picked one).
+  function efApplyVaccineTypeRouteHint(vaccineType, gen) {
+    if (!vaccineType) return;
+    google.script.run
+      .withSuccessHandler(function (result) {
+        if (gen !== efGen) return;
+        var routeSelect = document.getElementById('route');
+        if (result && result.route && !routeSelect.value) {
+          efPrefillSelectValue('route', result.route);
+        }
+      })
+      .withFailureHandler(function () { /* non-critical — leave Route blank for manual entry */ })
+      .getRouteHintForVaccine(vaccineType);
+  }
+
+  function efApplyDoseHistory(hist, gen) {
+    var type = document.getElementById('vaccineType').value;
+    efHasHistory = true;
+    efLoadBrandsPlain(type, hist.lastBrand, hist.lastSchedule, gen);
+    efPrefillSelectValue('adminSite', hist.lastAdminSite);
+    efPrefillSelectValue('route', hist.lastRoute);
+    // Recipient has no route on file yet for this vaccine (e.g. their
+    // first dose after this feature was rolled out) — fall back to the
+    // vaccine type's own Schedule Notes hint rather than leaving it blank
+    // when the sheet actually says something unambiguous.
+    if (!hist.lastRoute) efApplyVaccineTypeRouteHint(type, gen);
+
+    var doseSelect = document.getElementById('intendedDose');
+    var basePrefix = 'History found: last dose was "' + efEsc(hist.lastDoseNumber) + '" on ' + efEsc(hist.lastVaccinationDate) + ' (' + efEsc(hist.lastBrand) + ' / ' + efEsc(hist.lastSchedule) + '). ';
+
+    if (hist.nextIntendedDose) {
+      doseSelect.value = hist.nextIntendedDose;
+      efLockDoseField();
+      efShowHint(basePrefix + 'Pre-filled next dose "' + efEsc(hist.nextIntendedDose) + '" — locked to prevent accidental changes.');
+    } else if (hist.seriesComplete) {
+      efUnlockDoseField();
+      efShowHint(basePrefix + 'This series appears COMPLETE — no further scheduled dose. Series status: ' + efEsc(hist.seriesStatus) + '. If a new dose is genuinely needed (e.g. a booster outside the standard series), select it manually below.');
+    } else {
+      efUnlockDoseField();
+      efShowHint(basePrefix + 'Sheet guidance for what comes next: "' + efEsc(hist.nextDoseAdvisory || 'not specified') + '". Series status: ' + efEsc(hist.seriesStatus) + '. Please select the correct next dose manually.');
+    }
+    efHideMessage();
+  }
+
+  function efShowHint(text) {
+    var el = document.getElementById('doseHistoryHint');
+    el.textContent = text;
+    el.style.display = 'block';
+  }
+  function efHideHint() {
+    var el = document.getElementById('doseHistoryHint');
+    el.style.display = 'none';
+    el.textContent = '';
+  }
+
+  // ============================================================
+  // LIVE FOLLOW-UP PREVIEW
+  // ============================================================
+  var efPreviewSeq = 0;
+
+  function efUpdateFollowUpPreview() {
+    var vaccineType = document.getElementById('vaccineType').value;
+    var intendedDose = document.getElementById('intendedDose').value;
+    var schedule = document.getElementById('schedule').value;
+    var vaccinationDate = document.getElementById('vaccinationDate').value;
+
+    if (!vaccineType || !intendedDose || !schedule) {
+      efSetFollowUpFields('(fill in dose assessment & schedule above)');
+      return;
+    }
+
+    var seq = ++efPreviewSeq;
+    google.script.run
+      .withSuccessHandler(function (preview) {
+        if (seq !== efPreviewSeq) return;
+        if (!preview || !preview.nextDose) {
+          efSetFollowUpFields('—');
+          return;
+        }
+        document.getElementById('nextDose').value = preview.nextDose || '—';
+        document.getElementById('recommendedDate').value = preview.recommendedDate || '—';
+        document.getElementById('reminderDate').value = preview.reminderDate || '—';
+        document.getElementById('seriesStatus').value = preview.seriesStatus || '—';
+      })
+      .withFailureHandler(function () {
+        if (seq !== efPreviewSeq) return;
+        efSetFollowUpFields('—');
+      })
+      .getFollowUpPreview(vaccineType, '', schedule, intendedDose, vaccinationDate);
+  }
+
+  function efSetFollowUpFields(text) {
+    ['nextDose', 'recommendedDate', 'reminderDate', 'seriesStatus'].forEach(function (id) {
+      document.getElementById(id).value = text;
+    });
+  }
+
+  document.getElementById('vaccineType').addEventListener('change', efUpdateFollowUpPreview);
+  document.getElementById('intendedDose').addEventListener('change', efUpdateFollowUpPreview);
+  document.getElementById('schedule').addEventListener('change', efUpdateFollowUpPreview);
+  document.getElementById('vaccinationDate').addEventListener('change', efUpdateFollowUpPreview);
+
+  function efEsc(v) {
+    if (v === null || v === undefined) return '';
+    return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ============================================================
+  // DISPOSITIONS
+  // ============================================================
+  function efLoadDispositions() {
+    google.script.run
+      .withSuccessHandler(function (data) { efDispositions = data || []; })
+      .withFailureHandler(function (err) { efShowMessage('ERROR loading dispositions: ' + err.message, 'error'); })
+      .getDispositions();
+  }
+
+  function efUpdateReasonVisibility(disp) {
+    var wrap = document.getElementById('reasonFieldsWrap');
+    var needsReason = disp && disp !== 'Administered';
+    wrap.style.display = needsReason ? '' : 'none';
+    document.getElementById('reasonCategory').required = !!needsReason;
+    document.getElementById('specificReason').required = !!needsReason;
+    if (!needsReason) {
+      document.getElementById('reasonCategory').value = '';
+      document.getElementById('specificReason').value = '';
+    }
+  }
+
+  document.getElementById('doseDisposition').addEventListener('change', function () {
+    var disp = this.value;
+    var catSelect = document.getElementById('reasonCategory');
+    var reasonSelect = document.getElementById('specificReason');
+    catSelect.innerHTML = '<option value="">-- Select Category --</option>';
+    reasonSelect.innerHTML = '<option value="">-- Select Reason --</option>';
+    efUpdateReasonVisibility(disp);
+    if (!disp || disp === 'Administered') return;
+    var categories = new Set();
+    efDispositions.forEach(function (d) { if (d.disposition === disp && d.category) categories.add(d.category); });
+    categories.forEach(function (c) {
+      var opt = document.createElement('option');
+      opt.value = c; opt.text = c;
+      catSelect.appendChild(opt);
+    });
+  });
+
+  document.getElementById('reasonCategory').addEventListener('change', function () {
+    var disp = document.getElementById('doseDisposition').value;
+    var cat = this.value;
+    var reasonSelect = document.getElementById('specificReason');
+    reasonSelect.innerHTML = '<option value="">-- Select Reason --</option>';
+    if (!disp || !cat) return;
+    efDispositions.forEach(function (d) {
+      if (d.disposition === disp && d.category === cat && d.reason) {
+        var opt = document.createElement('option');
+        opt.value = d.reason; opt.text = d.reason;
+        reasonSelect.appendChild(opt);
+      }
+    });
+  });
+
+  // ============================================================
+  // VACCINATORS
+  // ============================================================
+  function efLoadVaccinators() {
+    google.script.run
+      .withSuccessHandler(function (list) {
+        efAllVaccinators = list || [];
+        if (efAllVaccinators.length === 0) {
+          efShowMessage('No vaccinators found. Please check Vaccinators_Master.', 'error');
+        } else {
+          efHideMessage();
+        }
+        efRenderVaccinatorOptions();
+      })
+      .withFailureHandler(function (err) { efShowMessage('ERROR loading vaccinators: ' + err.message, 'error'); })
+      .getVaccinators();
+  }
+
+  function efRenderVaccinatorOptions() {
+    var select = document.getElementById('vaccinator');
+    var searchText = document.getElementById('vaccinatorSearch').value.trim().toLowerCase();
+    var previousValue = select.value;
+    var filtered;
+
+    if (searchText) {
+      filtered = efAllVaccinators.filter(function (v) { return v.displayName.toLowerCase().indexOf(searchText) !== -1; });
+    } else if (efCurrentProvince) {
+      filtered = efAllVaccinators.filter(function (v) { return v.province === efCurrentProvince; });
+    } else {
+      filtered = efAllVaccinators;
+    }
+
+    select.innerHTML = '<option value="">-- Select Vaccinator --</option>';
+    filtered.forEach(function (v) {
+      var opt = document.createElement('option');
+      opt.value = v.displayName;
+      opt.dataset.license = v.licenseNumber || '';
+      opt.text = v.displayName + (v.province ? ' — ' + v.province : '');
+      select.appendChild(opt);
+    });
+
+    if (previousValue && !filtered.some(function (v) { return v.displayName === previousValue; })) {
+      var stillExists = efAllVaccinators.filter(function (v) { return v.displayName === previousValue; })[0];
+      if (stillExists) {
+        var opt = document.createElement('option');
+        opt.value = stillExists.displayName;
+        opt.dataset.license = stillExists.licenseNumber || '';
+        opt.text = stillExists.displayName + ' (currently selected)';
+        select.appendChild(opt);
+      }
+    }
+    select.value = previousValue;
+
+    var helper = document.getElementById('vaccinatorFilterHelper');
+    if (searchText) {
+      helper.textContent = filtered.length + ' match(es) for "' + searchText + '" across all provinces.';
+    } else if (efCurrentProvince) {
+      helper.textContent = 'Showing ' + filtered.length + ' vaccinator(s) in ' + efCurrentProvince + '. Use the 🔎 search box to find vaccinators from other provinces.';
+    } else {
+      helper.textContent = 'Showing all ' + filtered.length + ' vaccinator(s) — enter Site of Vaccination above to filter by province.';
+    }
+  }
+
+  document.getElementById('vaccinatorSearch').addEventListener('input', efRenderVaccinatorOptions);
+
+  document.getElementById('vaccinator').addEventListener('change', function () {
+    var selected = this.options[this.selectedIndex];
+    document.getElementById('vaccinatorLicense').value = (selected && selected.dataset) ? (selected.dataset.license || '') : '';
+  });
+
+  // ============================================================
+  // VALIDATION
+  // ============================================================
+  function efValidateForm() {
+    var checks = [
+      { id: 'location', test: function (v) { return !!v.trim(); }, msg: 'Please enter the site of vaccination.' },
+      { id: 'recipientSelect', test: function (v) { return !!v && !!efSelectedRecipient; }, msg: 'Please select a recipient.' },
+      { id: 'vaccineType', test: function (v) { return !!v; }, msg: 'Please select a vaccine type.' },
+      { id: 'vaccineBrand', test: function (v) { return !!v; }, msg: 'Please select a vaccine brand.' },
+      { id: 'schedule', test: function (v) { return !!v; }, msg: 'Please select a schedule.' },
+      { id: 'intendedDose', test: function (v) { return !!v; }, msg: 'Please select an intended dose number.' },
+      { id: 'doseDisposition', test: function (v) { return !!v; }, msg: 'Please select a dose disposition.' },
+      {
+        id: 'reasonCategory',
+        test: function (v) {
+          var disp = document.getElementById('doseDisposition').value;
+          if (!disp || disp === 'Administered') return true;
+          return !!v;
+        },
+        msg: 'Please select a reason category for this disposition.'
+      },
+      {
+        id: 'specificReason',
+        test: function (v) {
+          var disp = document.getElementById('doseDisposition').value;
+          if (!disp || disp === 'Administered') return true;
+          return !!v;
+        },
+        msg: 'Please select a specific reason for this disposition.'
+      }
+    ];
+    for (var i = 0; i < checks.length; i++) {
+      var el = document.getElementById(checks[i].id);
+      if (!checks[i].test(el.value)) {
+        efHighlightField(el);
+        efShowMessage(checks[i].msg, 'error');
+        return false;
+      }
+    }
+    efClearHighlight();
+    return true;
+  }
+
+  function efHighlightField(el) {
+    efClearHighlight();
+    el.classList.add('ef-invalid');
+    var target = el.closest('.form-row') || el;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(function () { el.focus(); }, 300);
+    var cleanup = function () { el.classList.remove('ef-invalid'); };
+    el.addEventListener('input', cleanup, { once: true });
+    el.addEventListener('change', cleanup, { once: true });
+  }
+
+  function efClearHighlight() {
+    Array.prototype.forEach.call(document.querySelectorAll('.ef-invalid'), function (el) { el.classList.remove('ef-invalid'); });
+  }
+
+  // ============================================================
+  // SUBMIT
+  // ============================================================
+  function efSubmit() {
+  if (!efValidateForm()) return;
+
+  // Disable button and show saving state
+  efSetSavingState(true);
+  efShowMessage('⟳ Saving record…', 'saving');
+
+  var recipientId = document.getElementById('recipientSelect').value;
+  var vaccineType = document.getElementById('vaccineType').value;
+  var intendedDose = document.getElementById('intendedDose').value;
+  var doseDisposition = document.getElementById('doseDisposition').value;
+  var vaccineBrand = document.getElementById('vaccineBrand').value;
+  var schedule = document.getElementById('schedule').value;
+
+  var record = {
+    recipientName: efSelectedRecipient.name,
+    recipientNameForLookup: efSelectedRecipient.nameForLookup,
+    recipientId: recipientId,
+    email: document.getElementById('email').value,
+    dob: document.getElementById('dob').value,
+    category: document.getElementById('category').value,
+    company: document.getElementById('company').value,
+    department: document.getElementById('department').value,
+    rawAssignedSite: efSelectedRecipient.rawAssignedSite || '',
+    vaccineType: vaccineType,
+    intendedDose: intendedDose,
+    doseDisposition: doseDisposition,
+    reasonCategory: document.getElementById('reasonCategory').value,
+    specificReason: document.getElementById('specificReason').value,
+    statusDate: document.getElementById('statusDate').value || efLocalDateStr(new Date()),
+    reviewDate: document.getElementById('reviewDate').value || '',
+    vaccineBrand: vaccineBrand,
+    schedule: schedule,
+    vaccinationDate: document.getElementById('vaccinationDate').value || '',
+    lotNumber: document.getElementById('lotNumber').value,
+    expiryDate: document.getElementById('expiryDate').value || '',
+    adminSite: document.getElementById('adminSite').value,
+    route: document.getElementById('route').value,
+    location: document.getElementById('location').value,
+    vaccinator: document.getElementById('vaccinator').value,
+    vaccinatorLicense: document.getElementById('vaccinatorLicense').value,
+    remarks: document.getElementById('remarks').value
+  };
+
+  google.script.run
+    .withSuccessHandler(function (response) {
+      efSetSavingState(false); // Re-enable button
+      efShowMessage('✅ Record ' + response.recordId + ' saved successfully! Form has been reset for the next entry.', 'success');
+      efClear(true);
+    })
+    .withFailureHandler(function (err) {
+      efSetSavingState(false); // Re-enable button
+      efShowMessage('❌ Error saving: ' + err.message, 'error');
+    })
+    .saveVaccinationRecord(record);
+}
+
+  // ============================================================
+  // CLEAR
+  // ============================================================
+  function efClear(keepMessage) {
+    document.getElementById('recipientSearch').value = '';
+    document.getElementById('recipientSelect').value = '';
+    efClearRecipientFields();
+    document.getElementById('vaccineType').value = '';
+    efResetDoseHistoryState();
+    document.getElementById('intendedDose').value = '';
+    efUnlockDoseField();
+    efClearBrands();
+    document.getElementById('doseDisposition').value = '';
+    document.getElementById('reasonCategory').innerHTML = '<option value="">-- Select Category --</option>';
+    document.getElementById('specificReason').innerHTML = '<option value="">-- Select Reason --</option>';
+    efUpdateReasonVisibility('');
+    document.getElementById('vaccinatorSearch').value = '';
+    ['reviewDate', 'lotNumber', 'expiryDate', 'adminSite', 'route', 'vaccinator', 'vaccinatorLicense', 'remarks'].forEach(function (id) {
+      document.getElementById(id).value = '';
+    });
+    var nowClear = new Date();
+    document.getElementById('statusDate').value = efLocalDateStr(nowClear);
+    document.getElementById('vaccinationDate').value = efLocalDateStr(nowClear);
+    efSetFollowUpFields('(fill in dose assessment & schedule above)');
+    efRenderRecipientOptions();
+    efRenderVaccinatorOptions();
+    if (!keepMessage) efHideMessage(true);
+    efClearHighlight();
+  }
+
+  // ============================================================
+  // TODAY BUTTON
+  // ============================================================
+  function efToday() {
+    var now = new Date();
+    document.getElementById('vaccinationDate').value = efLocalDateStr(now);
+    document.getElementById('statusDate').value = efLocalDateStr(now);
+    efShowMessage('📅 Dates set to today (' + now.toLocaleDateString() + ').', 'success');
+    setTimeout(efHideMessage, 2500);
+  }
+
+  // ============================================================
+  // MESSAGES
+  // ============================================================
+  var efErrorActive = false;
+
+  function efShowMessage(text, type) {
+    var msg = document.getElementById('ef-message');
+    msg.textContent = text;
+    msg.className = 'msg msg-' + type;
+    msg.style.display = 'block';
+    efErrorActive = (type === 'error');
+  }
+
+  function efHideMessage(force) {
+    if (efErrorActive && !force) return;
+    efErrorActive = false;
+    document.getElementById('ef-message').style.display = 'none';
+  }
+
+  function efSetSavingState(saving) {
+  var btn = document.getElementById('saveBtn');
+  if (!btn) return;
+  btn.disabled = saving;
+  if (saving) {
+    btn.innerHTML = '<span class="spinner">⟳</span> Saving…';
+  } else {
+    btn.innerHTML = '💾 Save Record';
+  }
+}
+
+  // ============================================================
+  // HELP WIDGET
+  // ============================================================
+  var VX_FAQS = [
+    {
+      q: 'Why is the Intended Dose Number locked and I can\'t change it?',
+      a: 'The system checked this recipient\'s vaccination history (or the vaccine\'s schedule, if this is their first dose) and pre-filled the correct next dose — it locks automatically so it can\'t be accidentally changed. If you genuinely believe it\'s wrong, re-select the Vaccine Type or Schedule to re-run the check, or contact IT Support below if it still looks incorrect.'
+    },
+    {
+      q: 'The Site of Vaccination field changed what I typed.',
+      a: 'This form auto-corrects small typos in the site name against known sites (e.g. missing province, misspelling) and shows a notice when it does. If the correction is wrong, you can still edit the field manually — it isn\'t locked.'
+    },
+    {
+      q: 'I got a "Recipient name lookup mismatch" error when saving.',
+      a: 'This means two different recipients in the system share the exact same name, and the sheet resolved your entry to the wrong one. The record was NOT saved. Please contact your administrator or IT Support so the duplicate can be reviewed before you try again.'
+    },
+    {
+      q: 'The Lot Number field is blocking my save.',
+      a: 'Lot Number is checked against the selected Brand and Expiry Date for consistency. If you\'re sure the lot number is correct as typed, double-check the Brand and Expiry Date fields match what\'s actually on the vial — a mismatch there is the most common cause.'
+    },
+    {
+      q: 'I see a warning that a vaccine should be given SC, not IM (or vice versa).',
+      a: 'Certain vaccines (currently MMR, Varicella, and Imojev) show a warning if the Route of Administration doesn\'t match the conventional route. This is a warning only, not a hard block — you can still save the record as entered if you\'re confident it\'s correct.'
+    },
+    {
+      q: 'I added a new recipient and got a duplicate-name warning.',
+      a: 'The system found an existing recipient with the exact same name. If this is genuinely a different person, click "Add Anyway" to save them as a new, separate recipient. If it\'s the same person, cancel and select the existing recipient from the dropdown instead.'
+    },
+    {
+      q: 'The recipient I need isn\'t showing up in the dropdown.',
+      a: 'By default the dropdown only shows recipients from your current Site of Vaccination\'s province. Use the 🔎 search box next to it to search every recipient in the system regardless of province. If they still don\'t appear, they may not be in Recipients_Master yet — use "➕ Add New Recipient" to create them.'
+    }
+  ];
+
+  function vxRenderFaqs() {
+    var list = document.getElementById('vxFaqList');
+    list.innerHTML = '';
+    VX_FAQS.forEach(function (faq, i) {
+      var item = document.createElement('div');
+      item.className = 'vx-faq-item';
+      var qBtn = document.createElement('button');
+      qBtn.type = 'button';
+      qBtn.className = 'vx-faq-q';
+      qBtn.innerHTML = '<span>' + faq.q + '</span><span class="vx-faq-caret">▾</span>';
+      qBtn.onclick = function () { item.classList.toggle('open'); };
+      var aDiv = document.createElement('div');
+      aDiv.className = 'vx-faq-a';
+      aDiv.textContent = faq.a;
+      item.appendChild(qBtn);
+      item.appendChild(aDiv);
+      list.appendChild(item);
+    });
+  }
+  vxRenderFaqs();
+
+  function vxToggleHelpPanel() {
+    document.getElementById('vxHelpPanel').classList.toggle('open');
+  }
+
+  function vxShowHelpMsg(text, type) {
+    var el = document.getElementById('vxHelpMsg');
+    el.textContent = text;
+    el.className = 'vx-help-msg show vx-help-msg--' + type;
+  }
+
+  var vxHelpTicketType = 'help';
+  function vxSetHelpTicketType(type) {
+    vxHelpTicketType = (type === 'bug') ? 'bug' : 'help';
+    document.getElementById('vxHelpTypeBtnHelp').classList.toggle('active', vxHelpTicketType === 'help');
+    document.getElementById('vxHelpTypeBtnBug').classList.toggle('active', vxHelpTicketType === 'bug');
+    var msgBox = document.getElementById('vxHelpMessage');
+    var submitBtn = document.getElementById('vxHelpSubmitBtn');
+    if (vxHelpTicketType === 'bug') {
+      msgBox.placeholder = 'What were you doing when it happened? What did you expect, and what actually happened?';
+      submitBtn.textContent = '📨 Send Bug Report';
+    } else {
+      msgBox.placeholder = "Describe the issue you're running into...";
+      submitBtn.textContent = '📨 Contact IT Support';
+    }
+  }
+
+  function vxSubmitHelpTicket() {
+    var message = document.getElementById('vxHelpMessage').value.trim();
+    var priority = document.getElementById('vxHelpPriority').value;
+    if (!message) {
+      vxShowHelpMsg(vxHelpTicketType === 'bug' ? 'Please describe what happened before submitting.' : 'Please describe the issue before submitting.', 'error');
+      return;
+    }
+    var btn = document.getElementById('vxHelpSubmitBtn');
+    var originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    var isBug = vxHelpTicketType === 'bug';
+    var caller = google.script.run
+      .withSuccessHandler(function (result) {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+        if (result && result.success) {
+          document.getElementById('vxHelpMessage').value = '';
+          vxShowHelpMsg(isBug ? '✅ Bug report sent to IT Support.' : '✅ Sent to IT Support. They\'ll follow up with you directly.', 'success');
+        } else {
+          vxShowHelpMsg('Could not send this — please try again in a moment.', 'error');
+        }
+      })
+      .withFailureHandler(function (err) {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+        vxShowHelpMsg('ERROR: ' + err.message, 'error');
+      });
+    // Bug reports are a separate, email-only path on the Hub (no ticket is
+    // created — see reportBugFromVxSync) - kept fully distinct from
+    // submitVxSyncHelpTicket so bug reports never land in the ticket inbox.
+    if (isBug) {
+      caller.reportBugFromVxSync(message, priority);
+    } else {
+      caller.submitVxSyncHelpTicket(message, priority);
+    }
+  }
+</script>
