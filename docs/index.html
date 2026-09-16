@@ -280,15 +280,33 @@
           </div>
           <div class="form-row">
             <label for="doseDisposition">Dose Disposition *</label>
-            <select id="doseDisposition">
+            <select id="doseDisposition" onchange="efDispositionChanged()">
               <option value="">-- Select --</option>
               <option value="Administered">Administered</option>
               <option value="Deferred">Deferred</option>
               <option value="Declined">Declined</option>
               <option value="No-show">No-show</option>
+              <option value="Contraindicated – Temporary">Contraindicated – Temporary</option>
+              <option value="Contraindicated – Permanent">Contraindicated – Permanent</option>
             </select>
           </div>
+          <div id="reasonFieldsWrap">
+            <div class="form-row">
+              <label for="reasonCategory">Reason Category</label>
+              <select id="reasonCategory" onchange="efPopulateSpecificReasons()">
+                <option value="">-- Select Category --</option>
+                <option value="Clinical">Clinical</option>
+                <option value="Logistical">Logistical</option>
+                <option value="Recipient Choice">Recipient Choice</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="specificReason">Specific Reason</label>
+              <select id="specificReason"><option value="">-- Select Reason --</option></select>
+            </div>
+          </div>
           <div class="form-row"><label for="statusDate">Status Date</label><input type="date" id="statusDate"></div>
+          <div class="form-row"><label for="reviewDate">Review / Reschedule Date</label><input type="date" id="reviewDate"></div>
         </div>
 
         <h2>VACCINATION DETAILS</h2>
@@ -301,8 +319,42 @@
             <label for="schedule">Schedule *</label>
             <select id="schedule"><option value="">-- Select Brand First --</option></select>
           </div>
+          <div class="form-row"><label for="vaccinationDate">Vaccination Date</label><input type="date" id="vaccinationDate"></div>
           <div class="form-row"><label for="lotNumber">Lot Number</label><input type="text" id="lotNumber" placeholder="e.g. LOT-2026-0143"></div>
+          <div class="form-row"><label for="expiryDate">Expiry Date</label><input type="date" id="expiryDate"></div>
+          <div class="form-row">
+            <label for="adminSite">Administration Site</label>
+            <select id="adminSite">
+              <option value="">-- Select Site --</option>
+              <option value="Left Deltoid">Left Deltoid</option>
+              <option value="Right Deltoid">Right Deltoid</option>
+              <option value="Left Anterolateral Thigh">Left Anterolateral Thigh</option>
+              <option value="Right Anterolateral Thigh">Right Anterolateral Thigh</option>
+              <option value="Other / Clinical Review">Other / Clinical Review</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="route">Route of Administration</label>
+            <select id="route">
+              <option value="">-- Select Route --</option>
+              <option value="IM">IM</option>
+              <option value="SC">SC</option>
+              <option value="ID">ID</option>
+              <option value="Oral">Oral</option>
+            </select>
+          </div>
           <div class="form-row"><label>Site of Vaccination</label><input type="text" id="locationEcho" readonly class="readonly"></div>
+          <div class="form-row">
+            <label for="vaccinator" style="width:auto; min-width:140px;">Vaccinator</label>
+            <select id="vaccinator" onchange="efVaccinatorChanged()">
+              <option value="">-- Select Vaccinator --</option>
+              <option value="Dr. Alison Ferreira" data-license="PRC-0041882">Dr. Alison Ferreira</option>
+              <option value="Nurse Daniel Ocampo" data-license="PRC-0055671">Nurse Daniel Ocampo</option>
+              <option value="Nurse Priya Shankar" data-license="PRC-0062390">Nurse Priya Shankar</option>
+            </select>
+          </div>
+          <div class="form-row"><label for="vaccinatorLicense">License Number</label><input type="text" id="vaccinatorLicense" readonly class="readonly"></div>
+          <div class="form-row"><label for="remarks">Remarks</label><textarea id="remarks"></textarea></div>
         </div>
 
         <h2>FOLLOW-UP &amp; SCHEDULE (updates live as you fill out the form above)</h2>
@@ -339,7 +391,7 @@
         <h2>&#128276; Action Required</h2>
         <div class="scroll">
           <table>
-            <thead><tr><th>Recipient</th><th>Site of Vaccination</th><th>Vaccine</th><th>Dose</th><th>Disposition</th><th>Review Date</th><th>Action</th></tr></thead>
+            <thead><tr><th>Recipient</th><th>Department</th><th>Site of Vaccination</th><th>Vaccine</th><th>Dose</th><th>Disposition</th><th>Reason</th><th>Review Date</th><th>Action</th></tr></thead>
             <tbody id="actionTable"></tbody>
           </table>
         </div>
@@ -349,20 +401,20 @@
         <h2>&#128197; Upcoming Doses / Appointments</h2>
         <div class="scroll">
           <table>
-            <thead><tr><th>Recipient</th><th>Site of Vaccination</th><th>Vaccine</th><th>Next Dose</th><th>Recommended Date</th><th>Status</th></tr></thead>
+            <thead><tr><th>Recipient</th><th>Department</th><th>Site of Vaccination</th><th>Vaccine</th><th>Next Dose</th><th>Recommended Date</th><th>Days Until</th><th>Status</th></tr></thead>
             <tbody id="upcomingTable"></tbody>
           </table>
         </div>
       </div>
 
       <div class="section">
-        <h2>&#128202; Follow-Up Buckets by Urgency</h2>
-        <div class="chart-wrap">
-          <div class="bar-chart" id="urgencyBars"></div>
-          <div class="donut-wrap">
-            <svg id="vaccineDonut" width="180" height="180" viewBox="0 0 180 180"></svg>
-            <div class="donut-legend" id="donutLegend"></div>
-          </div>
+        <h2>&#127970; Department Follow-Up Summary</h2>
+        <p style="margin:-4px 0 12px; font-size:0.85em; color:var(--vx-muted);">Always shows every Department/Unit, independent of the Filter By selection above.</p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Department</th><th>Recipients with Due</th><th>Total Due Doses</th><th>Due &le;30 Days</th><th>Due 31&ndash;90 Days</th><th>Future Doses</th></tr></thead>
+            <tbody id="deptTable"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -535,6 +587,33 @@
     efSelectedRecipient = null;
   }
 
+  var EF_SPECIFIC_REASONS = {
+    'Clinical': ['Active illness / fever', 'Known allergy to component', 'Recent immunoglobulin/blood product'],
+    'Logistical': ['Vaccine out of stock at site', 'Recipient arrived after cutoff', 'Cold chain issue with available dose'],
+    'Recipient Choice': ['Declined — personal reasons', 'Requested to reschedule', 'Requested a different brand not on hand']
+  };
+  function efPopulateSpecificReasons() {
+    var cat = document.getElementById('reasonCategory').value;
+    var select = document.getElementById('specificReason');
+    select.innerHTML = '<option value="">-- Select Reason --</option>';
+    (EF_SPECIFIC_REASONS[cat] || []).forEach(function (r) {
+      var opt = document.createElement('option'); opt.value = r; opt.text = r; select.appendChild(opt);
+    });
+  }
+  function efDispositionChanged() {
+    var disposition = document.getElementById('doseDisposition').value;
+    var wrap = document.getElementById('reasonFieldsWrap');
+    // Matches the real form: reason fields are only really meaningful for
+    // a non-"Administered" disposition, but left visible/optional here
+    // rather than hidden, same as production.
+    wrap.style.opacity = (disposition && disposition !== 'Administered') ? '1' : '0.6';
+  }
+  function efVaccinatorChanged() {
+    var select = document.getElementById('vaccinator');
+    var selected = select.options[select.selectedIndex];
+    document.getElementById('vaccinatorLicense').value = (selected && selected.dataset) ? (selected.dataset.license || '') : '';
+  }
+
   function efVaccineTypeChanged() {
     var type = document.getElementById('vaccineType').value;
     var gen = ++efGen;
@@ -688,25 +767,27 @@
   };
 
   var DEMO_ACTION_ROWS = [
-    { name: 'Ana Beatriz Ferreira', site: 'Meridian Clinic - Riverside', vaccine: 'Hepatitis B', dose: '2', disposition: 'No-show', review: '2026-08-30' },
-    { name: 'Devon Marsh', site: 'Meridian Clinic - Lakeview', vaccine: 'MMR (Measles, Mumps, Rubella)', dose: '1', disposition: 'Deferred', review: '2026-09-02' },
-    { name: 'Kiona Redcloud', site: 'Meridian Mobile Unit - Fairhaven', vaccine: 'Tdap', dose: '1', disposition: 'Declined', review: '2026-09-05' }
+    { name: 'Ana Beatriz Ferreira', department: 'Warehouse Operations', site: 'Meridian Clinic - Riverside', vaccine: 'Hepatitis B', dose: '2', disposition: 'No-show', reason: '—', review: '2026-08-30' },
+    { name: 'Devon Marsh', department: 'Fleet & Logistics', site: 'Meridian Clinic - Lakeview', vaccine: 'MMR (Measles, Mumps, Rubella)', dose: '1', disposition: 'Deferred', reason: 'Active illness / fever', review: '2026-09-02' },
+    { name: 'Kiona Redcloud', department: 'Administrative', site: 'Meridian Mobile Unit - Fairhaven', vaccine: 'Tdap', dose: '1', disposition: 'Declined', reason: 'Declined — personal reasons', review: '2026-09-05' }
   ];
 
   var DEMO_UPCOMING_ROWS = [
-    { name: 'Priya Chandrasekaran', site: 'Meridian Clinic - Riverside', vaccine: 'Hepatitis B', nextDose: 'Dose 2', date: '2026-09-18', status: 'DUE ≤7 DAYS' },
-    { name: 'Ravi Bhattacharya', site: 'Meridian Clinic - Lakeview', vaccine: 'COVID-19', nextDose: 'Booster', date: '2026-10-01', status: 'DUE 8–30 DAYS' },
-    { name: 'Femi Adisa', site: 'Meridian Clinic - Brookstone', vaccine: 'Influenza', nextDose: 'Annual Dose', date: '2026-09-10', status: 'OVERDUE' },
-    { name: 'Charlotte Nguyen-Baptiste', site: 'Meridian Mobile Unit - Fairhaven', vaccine: 'Typhoid', nextDose: 'Booster', date: '2026-12-02', status: 'FUTURE' }
+    { name: 'Priya Chandrasekaran', department: 'Warehouse Operations', site: 'Meridian Clinic - Riverside', vaccine: 'Hepatitis B', nextDose: 'Dose 2', date: '2026-09-18', daysUntil: 2, status: 'DUE ≤7 DAYS' },
+    { name: 'Ravi Bhattacharya', department: 'Field Sales', site: 'Meridian Clinic - Lakeview', vaccine: 'COVID-19', nextDose: 'Booster', date: '2026-10-01', daysUntil: 15, status: 'DUE 8–30 DAYS' },
+    { name: 'Femi Adisa', department: 'Cold Chain / QA', site: 'Meridian Clinic - Brookstone', vaccine: 'Influenza', nextDose: 'Annual Dose', date: '2026-09-10', daysUntil: -6, status: 'OVERDUE' },
+    { name: 'Charlotte Nguyen-Baptiste', department: 'Fleet & Logistics', site: 'Meridian Mobile Unit - Fairhaven', vaccine: 'Typhoid', nextDose: 'Booster', date: '2026-12-02', daysUntil: 78, status: 'FUTURE' }
   ];
 
-  var DEMO_VACCINE_MIX = [
-    { label: 'Hepatitis B', value: 118, color: '#16296b' },
-    { label: 'Influenza', value: 96, color: '#1fb6a8' },
-    { label: 'COVID-19', value: 84, color: '#3ec97a' },
-    { label: 'Tdap', value: 62, color: '#f39c12' },
-    { label: 'MMR', value: 34, color: '#8e44ad' },
-    { label: 'Typhoid', value: 18, color: '#2980b9' }
+  // Matches the real Dashboard.html: Department Follow-Up Summary always
+  // shows every Department/Unit, computed live from Vaccination_Tracker —
+  // not affected by the Filter By selection above it.
+  var DEMO_DEPARTMENTS = [
+    { dept: 'Warehouse Operations', withDue: 14, totalDue: 21, due30: 9, due90: 7, future: 5 },
+    { dept: 'Fleet & Logistics', withDue: 8, totalDue: 11, due30: 4, due90: 5, future: 2 },
+    { dept: 'Cold Chain / QA', withDue: 6, totalDue: 6, due30: 2, due90: 3, future: 1 },
+    { dept: 'Administrative', withDue: 5, totalDue: 7, due30: 1, due90: 2, future: 4 },
+    { dept: 'Field Sales', withDue: 3, totalDue: 4, due30: 0, due90: 1, future: 3 }
   ];
 
   function vxStatCard(value, label, cls) {
@@ -735,20 +816,19 @@
       vxStatCard(s.future, 'Future', 'future');
 
     document.getElementById('actionTable').innerHTML = DEMO_ACTION_ROWS.map(function (r) {
-      return '<tr><td>' + vxEsc(r.name) + '</td><td>' + vxEsc(r.site) + '</td><td>' + vxEsc(r.vaccine) +
-        '</td><td>' + vxEsc(r.dose) + '</td><td>' + vxEsc(r.disposition) + '</td><td>' + vxEsc(r.review) +
+      return '<tr><td>' + vxEsc(r.name) + '</td><td>' + vxEsc(r.department) + '</td><td>' + vxEsc(r.site) + '</td><td>' + vxEsc(r.vaccine) +
+        '</td><td>' + vxEsc(r.dose) + '</td><td>' + vxEsc(r.disposition) + '</td><td>' + vxEsc(r.reason) + '</td><td>' + vxEsc(r.review) +
         '</td><td><span class="status-badge badge-action">Follow up</span></td></tr>';
     }).join('');
 
     document.getElementById('upcomingTable').innerHTML = DEMO_UPCOMING_ROWS.map(function (r) {
       var cls = r.status === 'OVERDUE' ? 'badge-overdue' : (r.status.indexOf('DUE') === 0 ? 'badge-due' : 'badge-future');
-      return '<tr><td>' + vxEsc(r.name) + '</td><td>' + vxEsc(r.site) + '</td><td>' + vxEsc(r.vaccine) +
-        '</td><td>' + vxEsc(r.nextDose) + '</td><td>' + vxEsc(r.date) +
+      return '<tr><td>' + vxEsc(r.name) + '</td><td>' + vxEsc(r.department) + '</td><td>' + vxEsc(r.site) + '</td><td>' + vxEsc(r.vaccine) +
+        '</td><td>' + vxEsc(r.nextDose) + '</td><td>' + vxEsc(r.date) + '</td><td>' + vxEsc(r.daysUntil) +
         '</td><td><span class="status-badge ' + cls + '">' + vxEsc(r.status) + '</span></td></tr>';
     }).join('');
 
-    vxRenderUrgencyBars();
-    vxRenderDonut();
+    vxRenderDepartments();
 
     var msg = document.getElementById('db-message');
     msg.classList.add('show');
@@ -757,65 +837,11 @@
 
   function vxRefreshClicked() { vxLoadDashboard(); }
 
-  function vxRenderUrgencyBars() {
-    var buckets = [
-      { label: 'Overdue', value: DEMO_STATS.overdue, color: '#e74c3c' },
-      { label: 'Due ≤7 Days', value: DEMO_STATS.due7, color: '#f39c12' },
-      { label: 'Due 8–30 Days', value: DEMO_STATS.due30, color: '#2980b9' },
-      { label: 'Due 31–90 Days', value: DEMO_STATS.due90, color: '#2980b9' },
-      { label: 'Future', value: DEMO_STATS.future, color: '#3ec97a' }
-    ];
-    var max = Math.max.apply(null, buckets.map(function (b) { return b.value; }));
-    var html = buckets.map(function (b) {
-      var pct = max ? Math.round((b.value / max) * 100) : 0;
-      return '<div class="bar-row"><div class="bar-label">' + b.label + '</div>' +
-        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%; background:' + b.color + ';"></div></div>' +
-        '<div class="bar-value">' + b.value + '</div></div>';
+  function vxRenderDepartments() {
+    document.getElementById('deptTable').innerHTML = DEMO_DEPARTMENTS.map(function (d) {
+      return '<tr><td>' + vxEsc(d.dept) + '</td><td>' + d.withDue + '</td><td>' + d.totalDue +
+        '</td><td>' + d.due30 + '</td><td>' + d.due90 + '</td><td>' + d.future + '</td></tr>';
     }).join('');
-    document.getElementById('urgencyBars').innerHTML = html;
-  }
-
-  function vxRenderDonut() {
-    var total = DEMO_VACCINE_MIX.reduce(function (a, b) { return a + b.value; }, 0);
-    var cx = 90, cy = 90, r = 70, innerR = 42;
-    var angle = -90;
-    var svg = document.getElementById('vaccineDonut');
-    var parts = '';
-    DEMO_VACCINE_MIX.forEach(function (d) {
-      var frac = d.value / total;
-      var sweep = frac * 360;
-      var start = angle;
-      var end = angle + sweep;
-      parts += vxDonutSlice(cx, cy, r, innerR, start, end, d.color);
-      angle = end;
-    });
-    svg.innerHTML = parts;
-
-    document.getElementById('donutLegend').innerHTML = DEMO_VACCINE_MIX.map(function (d) {
-      var pct = Math.round((d.value / total) * 100);
-      return '<div class="li"><span class="sw" style="background:' + d.color + ';"></span>' + d.label + ' — ' + pct + '%</div>';
-    }).join('');
-  }
-
-  function vxPolarToCartesian(cx, cy, r, angleDeg) {
-    var rad = (angleDeg) * Math.PI / 180;
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-  }
-
-  function vxDonutSlice(cx, cy, rOuter, rInner, startAngle, endAngle, color) {
-    var p1 = vxPolarToCartesian(cx, cy, rOuter, startAngle);
-    var p2 = vxPolarToCartesian(cx, cy, rOuter, endAngle);
-    var p3 = vxPolarToCartesian(cx, cy, rInner, endAngle);
-    var p4 = vxPolarToCartesian(cx, cy, rInner, startAngle);
-    var largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
-    var d = [
-      'M', p1.x, p1.y,
-      'A', rOuter, rOuter, 0, largeArc, 1, p2.x, p2.y,
-      'L', p3.x, p3.y,
-      'A', rInner, rInner, 0, largeArc, 0, p4.x, p4.y,
-      'Z'
-    ].join(' ');
-    return '<path d="' + d + '" fill="' + color + '" stroke="#fff" stroke-width="1.5"></path>';
   }
 
   function vxOpenPdfModal() { document.getElementById('pdfModalOverlay').classList.add('open'); }
