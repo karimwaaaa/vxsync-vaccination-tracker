@@ -128,6 +128,19 @@
     border-radius: 4px; background: #fafbfc; color: #2c3e50; transition: 0.15s;
   }
   .global-search-inline input:focus { border-color: #2980b9; background: #ffffff; outline: none; box-shadow: 0 0 0 2px rgba(41,128,185,0.12); }
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center; margin-left: 6px;
+    font-size: 14px; font-weight: 700; color: #2980b9; cursor: pointer; background: #ebf5fb;
+    border-radius: 50%; width: 22px; height: 22px; line-height: 22px; user-select: none;
+    flex-shrink: 0; transition: 0.15s;
+  }
+  .info-icon:hover { background: #d4e6f1; }
+  .info-icon:active { background: #aed6f1; }
+  .ef-helper-tooltip {
+    background: #fef9e7; border-left: 3px solid #f1c40f; padding: 10px 14px; border-radius: 6px;
+    margin: 4px 0 8px 0; font-size: 13px; color: #7d6608; line-height: 1.5; animation: vxFadeIn 0.2s ease;
+  }
+  @keyframes vxFadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes vx-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   #saveBtn .spinner { display: inline-block; animation: vx-spin 0.9s linear infinite; font-size: 1.1em; margin-right: 6px; }
   @media (max-width: 700px) {
@@ -164,7 +177,7 @@
   #dashboardPanel .filter-btn { border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.85em; cursor: pointer; color: #fff; background: var(--vx-navy); position: relative; }
   #dashboardPanel .filter-btn.active { background: #10243f; box-shadow: 0 0 0 2px rgba(20,80,140,0.35); }
   #dashboardPanel .filter-menu {
-    display: none; position: absolute; top: 34px; left: 0; background: #fff; border-radius: 8px;
+    display: none; position: absolute; top: 34px; right: 90px; background: #fff; border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.18); padding: 12px; z-index: 20; min-width: 280px;
   }
   #dashboardPanel .filter-menu.open { display: block; }
@@ -217,13 +230,14 @@
   footer.demo-footer { text-align: center; color: var(--vx-muted); font-size: 0.78em; padding: 24px 16px 40px; }
 
   /* ---- Add New Recipient modal (recreated from EntryForm.html) ---- */
-  #entryPanel .btn-primary { background: var(--vx-navy); }
-  #entryPanel .btn-primary:hover { filter: brightness(1.15); }
+  #entryPanel .btn-primary { background: var(--vx-teal); }
+  #entryPanel .btn-primary:hover { filter: brightness(0.92); }
   #entryPanel .btn-add-recipient {
-    border: 1px solid var(--vx-teal); background: #fff; color: var(--vx-teal);
-    padding: 8px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85em; white-space: nowrap;
+    flex-shrink: 0; padding: 7px 14px; border: none; background: var(--vx-teal); color: #fff;
+    border-radius: 6px; font-size: 0.82em; font-weight: 600; cursor: pointer; white-space: nowrap;
+    transition: 0.15s; margin-left: 16px;
   }
-  #entryPanel .btn-add-recipient:hover { background: var(--vx-teal); color: #fff; }
+  #entryPanel .btn-add-recipient:hover { filter: brightness(0.92); }
   .ar-modal-overlay {
     display: none; position: fixed; inset: 0; background: rgba(15,28,74,0.45);
     z-index: 4000; align-items: flex-start; justify-content: center; padding: 30px 20px; overflow-y: auto;
@@ -310,8 +324,16 @@
             <div class="global-search-inline">
               <span class="search-icon">&#128269;</span>
               <input type="text" id="recipientSearch" placeholder="Search all sites..." oninput="efRenderRecipientOptions()">
+              <span class="info-icon" id="recipientSearchInfo" role="button" tabindex="0" aria-label="Show search tip">&#9432;</span>
             </div>
             <button type="button" class="btn-add-recipient" onclick="efOpenAddRecipientModal()">&#10133; Add New Recipient</button>
+            <span class="info-icon" id="addRecipientInfo" role="button" tabindex="0" aria-label="Show add recipient tip">&#9432;</span>
+          </div>
+          <div id="recipientSearchHelper" class="ef-helper-tooltip" style="display:none; margin-left: 150px;">
+            &#128161; <strong>Tip:</strong> The dropdown shows recipients from your current site. Use the search box to find recipients <strong>from other sites</strong> &ndash; it searches EVERYONE in the system.
+          </div>
+          <div id="addRecipientHelper" class="ef-helper-tooltip" style="display:none; margin-left: 150px;">
+            &#128161; <strong>Tip:</strong> Only use this if the recipient truly isn't in the system yet &mdash; check the dropdown and the search box first (including other sites) so you don't create a duplicate record for someone who's already enrolled.
           </div>
           <div id="recipientLookupIndicator" class="ef-typo-info ef-typo-notice" style="display:none;">&#128260; Looking up recipient&hellip;</div>
 
@@ -423,6 +445,7 @@
         <div class="field-group followup">
           <div class="form-row"><label>Next Dose</label><input type="text" id="nextDose" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
           <div class="form-row"><label>Recommended Next Dose Date</label><input type="text" id="recommendedDate" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
+          <div class="form-row"><label>Reminder Date</label><input type="text" id="reminderDate" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
           <div class="form-row"><label>Series Status</label><input type="text" id="seriesStatus" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
         </div>
 
@@ -686,6 +709,19 @@
   }
   function efHideMessage() { document.getElementById('ef-message').style.display = 'none'; }
 
+  function setupInfoToggle(toggleId, helperId) {
+    var toggle = document.getElementById(toggleId);
+    var helper = document.getElementById(helperId);
+    if (!toggle || !helper) return;
+    toggle.addEventListener('click', function(e) {
+      e.stopPropagation();
+      helper.style.display = (helper.style.display === 'none') ? 'block' : 'none';
+    });
+    toggle.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.click(); }
+    });
+  }
+
   (function efInit() {
     var siteSelect = document.getElementById('location');
     var vaccineSelect = document.getElementById('vaccineType');
@@ -700,6 +736,9 @@
     efRenderRecipientOptions();
     efShowMessage('Demo data loaded.', 'success');
     setTimeout(efHideMessage, 1800);
+    setupInfoToggle('recipientSearchInfo', 'recipientSearchHelper');
+    setupInfoToggle('addRecipientInfo', 'addRecipientHelper');
+    efDispositionChanged();
   })();
 
   function efSiteChanged() {
@@ -845,10 +884,14 @@
   function efDispositionChanged() {
     var disposition = document.getElementById('doseDisposition').value;
     var wrap = document.getElementById('reasonFieldsWrap');
-    // Matches the real form: reason fields are only really meaningful for
-    // a non-"Administered" disposition, but left visible/optional here
-    // rather than hidden, same as production.
-    wrap.style.opacity = (disposition && disposition !== 'Administered') ? '1' : '0.6';
+    var needsReason = disposition && disposition !== 'Administered';
+    wrap.style.display = needsReason ? '' : 'none';
+    document.getElementById('reasonCategory').required = !!needsReason;
+    document.getElementById('specificReason').required = !!needsReason;
+    if (!needsReason) {
+      document.getElementById('reasonCategory').value = '';
+      document.getElementById('specificReason').innerHTML = '<option value="">-- Select Reason --</option>';
+    }
   }
   function efVaccinatorChanged() {
     var select = document.getElementById('vaccinator');
@@ -931,10 +974,12 @@
     var doseCount = doseSelect.options.length ? doseSelect.options.length - 1 : 0;
     var next = document.getElementById('nextDose');
     var recDate = document.getElementById('recommendedDate');
+    var reminder = document.getElementById('reminderDate');
     var status = document.getElementById('seriesStatus');
     if (!type || !dose) {
       next.value = '(fill in dose assessment & schedule above)';
       recDate.value = '(fill in dose assessment & schedule above)';
+      reminder.value = '(fill in dose assessment & schedule above)';
       status.value = '(fill in dose assessment & schedule above)';
       return;
     }
@@ -942,12 +987,16 @@
     if (doseNum >= doseCount) {
       next.value = 'None — series complete';
       recDate.value = '—';
+      reminder.value = '—';
       status.value = 'Completed';
     } else {
       var d = new Date();
       d.setDate(d.getDate() + 28);
+      var r = new Date(d.getTime());
+      r.setDate(r.getDate() - 7); // reminder fires 7 days ahead of the recommended date, same as production
       next.value = 'Dose ' + (doseNum + 1);
       recDate.value = efLocalDateStr(d);
+      reminder.value = efLocalDateStr(r);
       status.value = 'In Progress';
     }
   }
