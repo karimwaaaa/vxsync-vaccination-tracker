@@ -1,6 +1,6 @@
 /**************************************************************
  * VxSync – Backend (Code.gs)
- * [COMPANY_NAME] Worksite Vaccination Program
+ * Client Worksite Vaccination Program
  *
  * ARCHITECTURE NOTES (read before editing):
  *
@@ -75,7 +75,7 @@ const CONFIG = {
   // someone who needs encoder access but isn't in Vaccinators_Master for
   // some reason.
   nurseEmails: ['nurse1@company.com', 'nurse2@company.com'],
-  adminEmails: ['admin1@company.com', 'admin2@company.com'],
+  adminEmails: ['admin1@company.com', 'admin2@company.com', 'admin3@company.com', 'admin4@company.com', 'admin5@company.com', 'wellness@company.com', 'admin6@company.com', 'admin7@company.com', 'admin8@company.com'],
   clientEmails: ['client@company.com'],
 
   // --- Optional starting site suggestion per nurse. ---
@@ -89,11 +89,12 @@ const CONFIG = {
   // DUMMY VALUES FOR TESTING — these three sites are picked from the messy
   // free-text values already sitting in Vaccination_Tracker column Y
   // ("MTC Whiteplains" / "MTC WHITEPLAINS" / "MTC Quezon City" / "MTC QC" /
-  // "Site Office A" / "Site Office A (Main)" / "Main Office" — all typed by
+  // "Head Office" / "Main Office QC" / "Main Office" — all typed by
   // hand before this interface existed).
   encoderSiteMap: {
-    'nurse1@company.com': 'Site Office A',
-    'nurse2@company.com': 'Site Office B'
+    'nurse1@company.com': 'Head Office',
+    'nurse2@company.com': 'MTC Quezon City',
+    'nurse3@company.com': 'MTC Whiteplains'
   },
 
   // --- Hub SSO integration ---
@@ -181,7 +182,7 @@ function doGet(e) {
     return htmlWithFavicon_(
       '<div style="font-family:sans-serif; max-width:480px; margin:80px auto; text-align:center; color:#333;">' +
       '<h1 style="color:#1a4d8f;">Please open VxSync from the Hub</h1>' +
-      '<p>This link only works when you launch it from inside the [COMPANY_NAME] Hub - ' +
+      '<p>This link only works when you launch it from inside the ' + CONFIG.clientName + ' Hub - ' +
       'log in there and use the "Launch Entry Form" / "Admin Dashboard" button for this ' +
       'client instead of opening this address directly.</p>' +
       (CONFIG.hubLoginUrl && CONFIG.hubLoginUrl.indexOf('YOUR-HUB-SITE') === -1
@@ -296,7 +297,7 @@ function verifyHubToken_(token) {
 // HTML string with this in the <head>; Index.html gets the same string
 // via template.faviconBase64 (see the paste-in snippet delivered
 // alongside this file).
-const FAVICON_BASE64_PNG = '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';
+const FAVICON_BASE64_PNG = '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';
 
 // htmlWithFavicon_ wraps a plain HTML string with a <head><link
 // rel="icon" ...></head> so the deny/redirect pages above also show the
@@ -875,7 +876,7 @@ const TRACKER_COL = {
 };
 
 // Vaccine_Schedule_Master column indexes (0-based), confirmed against the
-// real workbook (CorpShield_VxSync). Referenced by name below instead of
+// real workbook (the client's live workbook). Referenced by name below instead of
 // bare numbers so the dose-history / starting-dose logic reads the same
 // way the sheet's own Vaccination_Entry!B31 "Next Dose" formula does.
 const SCHEDULE_COL = {
@@ -1309,7 +1310,7 @@ function acronymMatches_(shortText, longText) {
 // against entire known phrases with one whole-string edit-distance
 // similarity score. That's what produced a confirmed bad suggestion in
 // practice: typing "MTC Whiteplains - Quezzzon Cityy" got "Did you mean
-// 'Site Office A - Quezon City'?" — a completely unrelated site — because
+// 'Head Office - Quezon City'?" — a completely unrelated site — because
 // whole-string similarity only cares about OVERALL character overlap and
 // length, not which specific part is actually similar to what. Two long
 // strings can share enough characters/structure (" - ", "City", similar
@@ -2198,7 +2199,7 @@ function saveVaccinationRecord(record) {
     //    The rule below is reverse-engineered from the sample rows in
     //    Vaccination_Tracker for "Administered", "Deferred" and "Declined".
     //    "No-show" and "Contraindicated – Temporary/Permanent" do not appear
-    //    in any sample row — CONFIRM these two cases with [COMPANY_NAME]
+    //    in any sample row — CONFIRM these two cases with the client
     //    before go-live; the labels below are a reasonable placeholder, not
     //    a verified spec.
     const statusPair = deriveScheduleAndReminderStatus_(record.doseDisposition, nextDose, recommendedDate);
@@ -2452,169 +2453,26 @@ function addRecipient(fields) {
 }
 
 // ============================================================
-// AUTO-ID ON DIRECT SHEET EDIT — for bulk pre-registration: admins paste
-// or type a client-provided recipient list straight into
-// Recipients_Master (before the program even starts, well outside the
-// Entry Form), and each qualifying row should get its VAC-###### the
-// moment it's real rather than someone typing IDs in by hand one at a
-// time. Fires once a row has BOTH Last Name (col C) and First Name
-// (col D) filled and no ID yet in col A — same minimum addRecipient()
-// itself requires, so a row counts as "real" at the same point either
-// entry path would consider it real. DOB and everything else can be
-// filled in before, after, or never — they don't gate ID assignment.
-//
-// ONE-TIME SETUP REQUIRED, PER CLIENT PROJECT: unlike a same-project
-// bound script, this project is a STANDALONE Apps Script (see CONFIG.
-// sheetId / getSheet_() above) once it's gone through auto-provisioning,
-// and a plain function named onEdit() ONLY auto-fires for a script's own
-// container-bound spreadsheet — it does nothing at all for a Sheet a
-// standalone script merely opens by ID. There is also no REST API call
-// that can install this trigger remotely the way provisionVxSyncClient
-// installs the web app deployment; Google only allows an installable
-// trigger like this to be created by actually running code inside the
-// project. So: after this Code.gs is deployed to a client (new or
-// updated), open that project in the Apps Script editor, pick
-// setupRecipientAutoIdTrigger from the function dropdown, and click Run
-// once (approving the permissions prompt that appears). That's a
-// one-time action per project — it does not need to be repeated on every
-// later Code.gs update, only if the trigger is ever deleted or the
-// project is recreated from scratch.
+// RECIPIENT-ID AUTO-GENERATION ON DIRECT SHEET EDIT — deliberately NOT
+// implemented in this standalone project. It used to be (see git history:
+// setupRecipientAutoIdTrigger / recipientsMasterOnEdit_ /
+// isRecipientAutoIdTriggerInstalled / assignMissingRecipientIds_,
+// removed together in the same change as this comment), but a full
+// investigation found a completely separate Apps Script project — bound
+// directly to each client's Sheet as its container, carried forward
+// automatically on every Drive copy from the master template — already
+// has its own bare onEdit(e) that assigns Recipients_Master's VAC-######
+// on direct edit, independent of this project entirely, on every client,
+// every time. That bound script's onEdit was never installed by anything
+// in the Hub or this file; it doesn't need to be. Trying to also install
+// an equivalent trigger here was solving a problem that didn't exist, and
+// the remote-install step (via the Apps Script Execution API) had a real,
+// unfixable-by-us 403 whenever a client's standalone script landed on a
+// default/auto-generated GCP project — see api_index.ts's provisioning
+// flow (git history) for that whole chase. Do not re-add this here; if
+// direct-Sheet auto-ID ever needs fixing, it's in that bound script, not
+// this one.
 // ============================================================
-function setupRecipientAutoIdTrigger() {
-  var ss = getSheet_();
-  // Remove any previous copy of this exact trigger first, so re-running
-  // this (e.g. after recreating the project) never leaves duplicates
-  // that would each assign a row two IDs.
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === 'recipientsMasterOnEdit_') {
-      ScriptApp.deleteTrigger(t);
-    }
-  });
-  ScriptApp.newTrigger('recipientsMasterOnEdit_')
-    .forSpreadsheet(ss)
-    .onEdit()
-    .create();
-
-  // Also fix date-only columns' display format for the WHOLE column, not
-  // just rows the web app writes — this is what makes DOB never show a
-  // time even when someone types it directly into Recipients_Master
-  // rather than through the Entry/Add-Recipient forms. Applied to the
-  // entire column (not just existing rows) so it keeps holding for every
-  // future row too, typed or app-written. Piggybacks on this same
-  // one-time "run me once per project" setup step rather than adding a
-  // second one for the client to remember.
-  var recipientsSheet = ss.getSheetByName('Recipients_Master');
-  if (recipientsSheet) {
-    stampDateOnlyFormat_(recipientsSheet.getRange('F2:F')); // Date of Birth
-  }
-  var entrySheet = ss.getSheetByName('Vaccination_Entry');
-  if (entrySheet) {
-    stampDateOnlyFormat_(entrySheet.getRange(ENTRY.STATUS_DATE, 2));
-    stampDateOnlyFormat_(entrySheet.getRange(ENTRY.REVIEW_DATE, 2));
-    stampDateOnlyFormat_(entrySheet.getRange(ENTRY.VACCINATION_DATE, 2));
-    stampDateOnlyFormat_(entrySheet.getRange(ENTRY.EXPIRY_DATE, 2));
-  }
-  var trackerSheet = ss.getSheetByName('Vaccination_Tracker');
-  if (trackerSheet) {
-    [TRACKER_COL.STATUS_DATE, TRACKER_COL.REVIEW_DATE, TRACKER_COL.VACCINATION_DATE, TRACKER_COL.EXPIRY_DATE].forEach(function (colIdx) {
-      stampDateOnlyFormat_(trackerSheet.getRange(2, colIdx + 1, Math.max(trackerSheet.getMaxRows() - 1, 1), 1));
-    });
-  }
-}
-
-function recipientsMasterOnEdit_(e) {
-  try {
-    if (!e || !e.range) return; // e.g. someone ran this manually from the editor rather than a real edit firing it
-    var sheet = e.range.getSheet();
-    if (sheet.getName() !== 'Recipients_Master') return;
-
-    var startRow = e.range.getRow();
-    var numRows = e.range.getNumRows();
-    if (startRow < 2) {
-      // The edited range touched row 1 (header) — if it was a multi-row
-      // paste starting there, still process row 2 onward from that same
-      // paste instead of ignoring the whole thing.
-      numRows -= (2 - startRow);
-      startRow = 2;
-      if (numRows <= 0) return;
-    }
-
-    var lock = LockService.getScriptLock();
-    // A short wait, not the 30s addRecipient() uses — this is a simple/
-    // installable trigger reacting to something that already happened on
-    // the sheet, not a person waiting on a submit button. If another
-    // edit's trigger run is mid-flight, this one's rows are already
-    // sitting on the sheet and will get picked up by the next edit to
-    // touch them (or a manual re-save) rather than making someone wait.
-    if (!lock.tryLock(10000)) return;
-    try {
-      assignMissingRecipientIds_(sheet, startRow, numRows);
-    } finally {
-      lock.releaseLock();
-    }
-  } catch (err) {
-    // Must never throw back into the edit itself — an uncaught error
-    // here would look to the person typing like their edit failed.
-    console.error('recipientsMasterOnEdit_ error:', err);
-  }
-}
-
-function assignMissingRecipientIds_(sheet, startRow, numRows) {
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return;
-
-  // A running max over the WHOLE id column, not just "the last row" —
-  // unlike the Entry Form (which always appends at the bottom in order),
-  // a bulk paste can land rows out of physical order, so the true next
-  // number has to be the highest one anywhere in the column.
-  var allIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  var maxNum = 0;
-  for (var i = 0; i < allIds.length; i++) {
-    var m = /VAC-(\d+)$/.exec(String(allIds[i][0] || ''));
-    if (m) {
-      var n = parseInt(m[1], 10);
-      if (n > maxNum) maxNum = n;
-    }
-  }
-
-  // Read every existing name once up front for the duplicate flag below,
-  // rather than re-scanning the whole sheet per row.
-  var allNames = sheet.getRange(2, 3, lastRow - 1, 3).getValues(); // C,D,E = last, first, middle
-
-  var endRow = Math.min(startRow + numRows - 1, lastRow);
-  for (var r = startRow; r <= endRow; r++) {
-    var idCell = sheet.getRange(r, 1);
-    if (idCell.getValue()) continue; // already has an ID — never reassign or remove it
-
-    var last = sheet.getRange(r, 3).getValue();
-    var first = sheet.getRange(r, 4).getValue();
-    if (!last || !first) continue; // not yet a "real" row
-
-    maxNum += 1;
-    idCell.setValue('VAC-' + String(maxNum).padStart(6, '0'));
-
-    // Duplicate flag — non-blocking (a visible note, not a hard stop):
-    // there's no one to click "confirm anyway" on an unattended sheet
-    // edit the way the Entry Form's modal allows, and two different
-    // people CAN genuinely share a name.
-    var middle = sheet.getRange(r, 5).getValue();
-    var targetKey = normalizeLookupKey_(last + ', ' + first + (middle ? ' ' + middle : ''));
-    var dupeRow = -1;
-    for (var j = 0; j < allNames.length; j++) {
-      var otherRow = j + 2;
-      if (otherRow === r) continue;
-      var oLast = allNames[j][0], oFirst = allNames[j][1], oMiddle = allNames[j][2];
-      if (!oLast || !oFirst) continue;
-      if (normalizeLookupKey_(oLast + ', ' + oFirst + (oMiddle ? ' ' + oMiddle : '')) === targetKey) {
-        dupeRow = otherRow;
-        break;
-      }
-    }
-    idCell.setNote(dupeRow > 0
-      ? '⚠ Possible duplicate: same name as row ' + dupeRow + ' in this sheet. Verify before treating these as two different people.'
-      : null);
-  }
-}
 
 
 // ============================================================
@@ -3117,20 +2975,32 @@ function getSiteSummary() {
 
 // Client-facing entry point for the top stats / Action Required /
 // Upcoming Doses tables. mode: 'none' | 'department' | 'site'.
-// 'none' reads Vaccination_Report's own formulas (sheet is the source of
-// truth for the default view); 'department'/'site' use the live
-// computation above, since the sheet has no formula for either grouping.
+// ------------------------------------------------------------
+// UNIFIED onto computeDashboardData_ for every mode, including 'none' —
+// this fixes a real, reproduced bug: the old 'none' branch below read
+// Action Required / Upcoming Doses from Vaccination_Report's own
+// pre-built array formulas (getActionRequired/getUpcomingDoses), a
+// SEPARATE data path from the one Department Follow-Up Summary and the
+// 'department'/'site' filtered views already use (computeDashboardData_,
+// which reads Vaccination_Tracker directly). Confirmed against a real
+// test workbook: Vaccination_Tracker genuinely had 6 due doses for a
+// recipient — Department Follow-Up Summary (Tracker-based) correctly
+// showed them, but the formula-fed Upcoming Doses table showed "No
+// upcoming doses" for the exact same data, because Vaccination_Report's
+// array formula had silently gone stale/out of sync with the real Tracker
+// data. That whole class of bug is now impossible: every dashboard view
+// — default, Department-filtered, Site-filtered — reads the same live
+// Vaccination_Tracker data through the same, already-proven-correct
+// computeDashboardData_ engine. (getDashboardStats/getActionRequired/
+// getUpcomingDoses/getSiteSummary are intentionally left defined below,
+// unchanged — getPdfReportData() still calls getDashboardStats() for its
+// Executive Summary snapshot — they're just no longer used to build the
+// live dashboard's default view.)
+// ------------------------------------------------------------
 function getDashboardData(mode, filterValue) {
   assertCanViewReport_();
   try {
     const m = mode || 'none';
-    if (m === 'none') {
-      return {
-        stats: getDashboardStats(),
-        actionRequired: getActionRequired(),
-        upcomingDoses: getUpcomingDoses()
-      };
-    }
     return computeDashboardData_(m, filterValue);
   } catch (e) {
     console.error('getDashboardData error:', e);

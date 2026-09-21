@@ -46,7 +46,27 @@
     margin: 0;
     box-shadow: 0 6px 20px rgba(0,0,0,0.2);
     font-weight: 600;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
   }
+  #entryPanel #ef-message-text { flex: 1; }
+  /* Dismiss (X) button — shown only for a resolved "saved" or "error"
+     notice (see efShowMessage), never for the transient "saving…" state,
+     since that one resolves on its own within a second or two and isn't
+     what the user asked to be able to clear manually. */
+  #entryPanel .ef-msg-close {
+    flex: none;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.05em;
+    line-height: 1;
+    padding: 0 0 0 8px;
+    color: inherit;
+    opacity: 0.65;
+  }
+  #entryPanel .ef-msg-close:hover { opacity: 1; }
   #entryPanel .field-group { background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
   #entryPanel .field-group.site-first { background: #fff7e6; border: 1px solid #f5d78e; }
   #entryPanel .field-group.followup { background: #eaf6f4; }
@@ -179,8 +199,27 @@
   cursor: pointer;
   white-space: nowrap;
   transition: 0.15s;
+  margin-left: 16px; /* Pushes the button away from the search box tooltip */
 }
 .btn-add-recipient:hover { filter: brightness(0.92); }
+
+/* Pushes the Add Recipient tooltip away from the button */
+#addRecipientInfo {
+  margin-left: 10px;
+}
+
+/* Fixes the spacing when the form wraps on smaller screens */
+@media (max-width: 700px) {
+  .btn-add-recipient {
+    margin-left: 0;
+    margin-top: 10px;
+  }
+  #addRecipientInfo {
+    margin-left: 0;
+    margin-top: 6px;
+    align-self: flex-start;
+  }
+}
 
 .ar-modal-overlay {
   display: none;
@@ -407,6 +446,23 @@
 .vx-help-msg--success { background: #d5f5e3; color: #1a7a4a; }
 .vx-help-msg--error { background: #fadbd8; color: #922b21; }
 
+/* Generic "system is looking something up" indicator, reused wherever a
+   background lookup might silently prefill a field (Site typo checking
+   already had its own; this is the shared style for the rest: dose
+   history, brand/schedule loading, route hints, and the recipient/
+   vaccinator province lookup). Same visual language as ef-typo-info so
+   it reads as "the system is working," not an error. */
+.ef-searching-indicator {
+  display: none;
+  margin: -4px 0 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  background: #eaf6f4;
+  color: #155e56;
+}
+.ef-searching-indicator.show { display: block; }
+
 @media (max-width: 480px) {
   .vx-help-panel { right: 12px; left: 12px; width: auto; bottom: 84px; }
   .vx-help-fab { right: 14px; bottom: 14px; }
@@ -414,7 +470,10 @@
 </style>
 
 <div class="ef-container">
-  <div id="ef-message" class="msg"></div>
+  <div id="ef-message" class="msg">
+    <span id="ef-message-text"></span>
+    <button type="button" id="ef-message-close" class="ef-msg-close" onclick="efHideMessage(true)" aria-label="Dismiss this message" title="Dismiss" hidden>✕</button>
+  </div>
 
   <form id="entryForm">
 
@@ -484,6 +543,12 @@
         <label for="intendedDose">Intended Dose Number *</label>
         <select id="intendedDose" required><option value="">-- Select Dose --</option></select>
       </div>
+      <!-- This one indicator is reused across the whole chain of
+           background lookups that can end up prefilling Brand, Schedule,
+           Dose, Administration Site and Route — see efSetDoseLookupIndicator
+           in the script below. Its text changes as the lookup progresses
+           so the encoder always knows the system is still working AND
+           roughly what it's about to fill in for them. -->
       <div id="doseHistoryLookupIndicator" class="ef-typo-info ef-typo-notice" style="display:none;">🔄 Checking this recipient's vaccination history for this vaccine…</div>
       <div id="doseHistoryHint" style="display:none; margin: -4px 0 12px; padding: 8px 12px; border-radius: 6px; background:#eaf6f4; color:#155e56; font-size:0.85em;"></div>
       <div class="form-row">
@@ -524,6 +589,7 @@
         <label for="vaccineBrand">Vaccine Brand *</label>
         <select id="vaccineBrand" required><option value="">-- Select Brand --</option></select>
       </div>
+      <div id="brandScheduleLookupIndicator" class="ef-searching-indicator">🔄 Loading schedules for this brand…</div>
       <div class="form-row">
         <label for="schedule">Schedule *</label>
         <select id="schedule" required><option value="">-- Select Schedule --</option></select>
@@ -579,6 +645,7 @@
          ============================================================ -->
     <h2>FOLLOW-UP &amp; SCHEDULE (updates live as you fill out the form above)</h2>
     <div class="field-group followup">
+      <div id="followUpPreviewIndicator" class="ef-searching-indicator">🔄 Calculating the follow-up schedule…</div>
       <div class="form-row"><label>Next Dose</label><input type="text" id="nextDose" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
       <div class="form-row"><label>Recommended Next Dose Date</label><input type="text" id="recommendedDate" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
       <div class="form-row"><label>Reminder Date</label><input type="text" id="reminderDate" readonly class="readonly" value="(fill in dose assessment &amp; schedule above)"></div>
@@ -819,6 +886,12 @@
     document.getElementById('locationEcho').value = document.getElementById('location').value;
   }
 
+  // Looking up the province for whatever Site of Vaccination was typed is
+  // itself a background search — and its result silently decides which
+  // recipients/vaccinators show up by default in the dropdowns below (a
+  // form of "pre-filtering," even though it isn't filling in a specific
+  // field). Reuses the shared searching-indicator style so that isn't
+  // invisible either.
   function efUpdateProvinceContext() {
     var site = document.getElementById('location').value;
     if (!site) {
@@ -827,14 +900,26 @@
       efRenderVaccinatorOptions();
       return;
     }
+    var gen = ++efProvinceGen;
+    efSetProvinceLookupIndicator(true);
     google.script.run
       .withSuccessHandler(function (province) {
+        if (gen !== efProvinceGen) return;
+        efSetProvinceLookupIndicator(false);
         efCurrentProvince = province || '';
         efRenderRecipientOptions();
         efRenderVaccinatorOptions();
       })
-      .withFailureHandler(function () { /* non-critical */ })
+      .withFailureHandler(function () { if (gen === efProvinceGen) efSetProvinceLookupIndicator(false); /* non-critical */ })
       .getProvinceForSite(site);
+  }
+  var efProvinceGen = 0;
+  function efSetProvinceLookupIndicator(active) {
+    var helper = document.getElementById('recipientFilterHelper');
+    if (!helper) return;
+    if (active) {
+      helper.textContent = '🔄 Looking up the province for this site — recipient/vaccinator lists will update…';
+    }
   }
 
   document.getElementById('location').addEventListener('input', efEchoLocation);
@@ -1237,7 +1322,11 @@
         if (gen !== efGen) return; // a newer selection has since superseded this lookup
         var select = document.getElementById('vaccineBrand');
         select.innerHTML = '<option value="">-- Select Brand --</option>';
-        if (!brands || brands.length === 0) { efShowMessage('No brands found for this vaccine type.', 'error'); return; }
+        if (!brands || brands.length === 0) {
+          efSetDoseLookupIndicator(false);
+          efShowMessage('No brands found for this vaccine type.', 'error');
+          return;
+        }
         brands.forEach(function (b) {
           var opt = document.createElement('option');
           opt.value = b; opt.text = b;
@@ -1252,9 +1341,15 @@
           }
           select.value = preselectBrand; // prefilled ONLY — select stays a normal, fully editable dropdown
           efLoadSchedulesPlain(type, preselectBrand, preselectSchedule, gen);
+        } else {
+          // No brand to prefill (fresh recipient/vaccine with no history)
+          // — this particular lookup chain ends here, so the indicator
+          // that's been on screen since efCheckDoseHistory started can
+          // come down now.
+          efSetDoseLookupIndicator(false);
         }
       })
-      .withFailureHandler(function (err) { if (gen === efGen) efShowMessage('ERROR loading brands: ' + err.message, 'error'); })
+      .withFailureHandler(function (err) { if (gen === efGen) { efSetDoseLookupIndicator(false); efShowMessage('ERROR loading brands: ' + err.message, 'error'); } })
       .getBrands(type);
   }
 
@@ -1265,7 +1360,11 @@
         if (gen !== efGen) return;
         var select = document.getElementById('schedule');
         select.innerHTML = '<option value="">-- Select Schedule --</option>';
-        if (!schedules || schedules.length === 0) { efShowMessage('No schedules found for this brand.', 'error'); return; }
+        if (!schedules || schedules.length === 0) {
+          efSetDoseLookupIndicator(false);
+          efShowMessage('No schedules found for this brand.', 'error');
+          return;
+        }
         schedules.forEach(function (s) {
           var opt = document.createElement('option');
           opt.value = s; opt.text = s;
@@ -1280,9 +1379,13 @@
           }
           select.value = preselectSchedule;
         }
+        // This is the true end of the "recipient/vaccine changed" lookup
+        // chain (history check -> brand load -> schedule load) — safe to
+        // hide the indicator here regardless of which branch got us here.
+        efSetDoseLookupIndicator(false);
         efUpdateFollowUpPreview();
       })
-      .withFailureHandler(function (err) { if (gen === efGen) efShowMessage('ERROR loading schedules: ' + err.message, 'error'); })
+      .withFailureHandler(function (err) { if (gen === efGen) { efSetDoseLookupIndicator(false); efShowMessage('ERROR loading schedules: ' + err.message, 'error'); } })
       .getSchedules(type, brand);
   }
 
@@ -1291,8 +1394,18 @@
     var brand = this.value;
     var gen = ++efGen; // encoder is manually overriding brand — invalidate any in-flight schedule/dose lookup tied to the previous brand
     if (!type || !brand) { efClearSchedules(); return; }
+    efSetBrandScheduleIndicator(true);
     efLoadSchedulesPlain(type, brand, null, gen);
   });
+
+  function efSetBrandScheduleIndicator(active) {
+    var el = document.getElementById('brandScheduleLookupIndicator');
+    el.classList.toggle('show', !!active);
+  }
+
+  // Hide the manual brand-change indicator whenever the shared dose
+  // lookup indicator settles, whichever chain it came from.
+  var efSetDoseLookupIndicator_base = null;
 
   document.getElementById('schedule').addEventListener('change', function () {
     var type = document.getElementById('vaccineType').value;
@@ -1300,12 +1413,13 @@
     var schedule = this.value;
     var gen = ++efGen; // new schedule choice — invalidate any in-flight starting-dose lookup tied to the previous one
     if (!type || !brand || !schedule || efHasHistory) { efUpdateFollowUpPreview(); return; }
-    efSetDoseLookupIndicator(true);
+    efSetDoseLookupIndicator(true, '🔄 Determining the starting dose for this schedule…');
     efLockDoseField(); // locked WHILE looking up too — nothing to pick yet until this resolves
     google.script.run
       .withSuccessHandler(function (info) {
         if (gen !== efGen) return; // superseded by a newer brand/schedule/type change
         efSetDoseLookupIndicator(false);
+        efSetBrandScheduleIndicator(false);
         if (info && info.label) {
           var select = document.getElementById('intendedDose');
           var hasOption = Array.prototype.some.call(select.options, function (o) { return o.value === info.label; });
@@ -1323,6 +1437,7 @@
       .withFailureHandler(function () {
         if (gen !== efGen) return;
         efSetDoseLookupIndicator(false);
+        efSetBrandScheduleIndicator(false);
         efUnlockDoseField();
         efUpdateFollowUpPreview();
       })
@@ -1355,6 +1470,8 @@
     efHasHistory = false;
     efHideHint();
     efUnlockDoseField();
+    efSetDoseLookupIndicator(false);
+    efSetBrandScheduleIndicator(false);
   }
 
   function efPopulateDoseOptions(selectedValue, gen) {
@@ -1376,15 +1493,18 @@
       .getDoseNumbers();
   }
 
-  // Locks/shows-or-hides the "checking history" indicator AND the dose
-  // field together — while the lookup is in flight there is genuinely
-  // nothing valid to prefill yet, so the dose field stays locked (not
-  // just visually "loading") until the lookup resolves one way or the
-  // other. This is what was missing before: the round trip to
-  // Vaccination_Tracker was invisible, so an encoder had no way to tell
-  // "still checking" apart from "checked, nothing to prefill."
-  function efSetDoseLookupIndicator(active) {
-    document.getElementById('doseHistoryLookupIndicator').style.display = active ? 'block' : 'none';
+  // Shows/hides the shared "the system is looking things up and may
+  // pre-fill fields below" indicator, and (when active) sets its text to
+  // whatever stage of the lookup chain is currently running — Checking
+  // history -> Loading brand & schedule -> Determining starting dose —
+  // so the encoder always has an honest, current answer to "is it still
+  // working, and what might it change for me?" instead of a generic
+  // spinner or, worse, nothing at all.
+  function efSetDoseLookupIndicator(active, text) {
+    var el = document.getElementById('doseHistoryLookupIndicator');
+    if (text) el.textContent = text;
+    el.style.display = active ? 'block' : 'none';
+    document.getElementById('intendedDose').disabled = active ? true : document.getElementById('intendedDose').disabled;
   }
 
   function efCheckDoseHistory() {
@@ -1393,13 +1513,13 @@
     var gen = ++efGen; // this is a brand-new lookup chain — invalidate anything still in flight
     efResetDoseHistoryState();
     if (!recipientId || !vaccineType) { efClearBrands(); return; }
-    efSetDoseLookupIndicator(true);
+    efSetDoseLookupIndicator(true, '🔄 Checking this recipient’s vaccination history for this vaccine — may pre-fill Brand, Schedule, Dose, Administration Site & Route below…');
     efLockDoseField();
     google.script.run
       .withSuccessHandler(function (hist) {
         if (gen !== efGen) return; // superseded — do not touch the DOM with stale results
-        efSetDoseLookupIndicator(false);
         if (hist && hist.hasHistory) {
+          efSetDoseLookupIndicator(true, '🔄 History found — loading Brand & Schedule options…');
           efApplyDoseHistory(hist, gen);
         } else {
           // No existing record for this recipient/vaccine — per client
@@ -1414,6 +1534,7 @@
           // Route are reset to blank too — a value prefilled from a
           // PREVIOUS vaccine type's history shouldn't linger and look like
           // a suggestion for this different vaccine that has no history.
+          efSetDoseLookupIndicator(true, '🔄 No prior history — loading Brand & Schedule options…');
           efLoadBrandsPlain(vaccineType, null, null, gen);
           efPopulateDoseOptions(null, gen);
           efUnlockDoseField();
@@ -1533,13 +1654,16 @@
 
     if (!vaccineType || !intendedDose || !schedule) {
       efSetFollowUpFields('(fill in dose assessment & schedule above)');
+      document.getElementById('followUpPreviewIndicator').classList.remove('show');
       return;
     }
 
     var seq = ++efPreviewSeq;
+    document.getElementById('followUpPreviewIndicator').classList.add('show');
     google.script.run
       .withSuccessHandler(function (preview) {
         if (seq !== efPreviewSeq) return;
+        document.getElementById('followUpPreviewIndicator').classList.remove('show');
         if (!preview || !preview.nextDose) {
           efSetFollowUpFields('—');
           return;
@@ -1551,6 +1675,7 @@
       })
       .withFailureHandler(function () {
         if (seq !== efPreviewSeq) return;
+        document.getElementById('followUpPreviewIndicator').classList.remove('show');
         efSetFollowUpFields('—');
       })
       .getFollowUpPreview(vaccineType, '', schedule, intendedDose, vaccinationDate);
@@ -1838,6 +1963,7 @@
     document.getElementById('statusDate').value = efLocalDateStr(nowClear);
     document.getElementById('vaccinationDate').value = efLocalDateStr(nowClear);
     efSetFollowUpFields('(fill in dose assessment & schedule above)');
+    document.getElementById('followUpPreviewIndicator').classList.remove('show');
     efRenderRecipientOptions();
     efRenderVaccinatorOptions();
     if (!keepMessage) efHideMessage(true);
@@ -1862,10 +1988,18 @@
 
   function efShowMessage(text, type) {
     var msg = document.getElementById('ef-message');
-    msg.textContent = text;
+    document.getElementById('ef-message-text').textContent = text;
     msg.className = 'msg msg-' + type;
-    msg.style.display = 'block';
+    msg.style.display = 'flex';
     efErrorActive = (type === 'error');
+    // The dismiss (X) button only makes sense once the outcome is
+    // resolved — a saved confirmation or an error — so the user can
+    // clear it whenever they want, per their request. The transient
+    // "⟳ Saving…" state is intentionally left without one: it disappears
+    // on its own within a second or two once the save call resolves into
+    // either a success or error message (which then gets its own X).
+    var closeBtn = document.getElementById('ef-message-close');
+    closeBtn.hidden = !(type === 'success' || type === 'error');
   }
 
   function efHideMessage(force) {
@@ -1916,6 +2050,10 @@
     {
       q: 'The recipient I need isn\'t showing up in the dropdown.',
       a: 'By default the dropdown only shows recipients from your current Site of Vaccination\'s province. Use the 🔎 search box next to it to search every recipient in the system regardless of province. If they still don\'t appear, they may not be in Recipients_Master yet — use "➕ Add New Recipient" to create them.'
+    },
+    {
+      q: 'How do I know when the system is looking something up in the background?',
+      a: 'Whenever a background lookup could change or pre-fill a field for you — checking this recipient\'s history, loading brand/schedule options, working out a starting dose, or checking the site spelling — a small "🔄 …" note appears just above that part of the form while it\'s running, and disappears once it\'s done (or turns into an error/hint message if something needs your attention). If you don\'t see one, the system isn\'t currently searching for that field.'
     }
   ];
 

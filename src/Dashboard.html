@@ -22,6 +22,7 @@
   #dashboardPanel .badge-action { background: #ebf5fb; color: #1b4f72; }
   #dashboardPanel .scroll { overflow-x: auto; }
   #dashboardPanel .empty-row td { text-align: center; color: var(--vx-muted); padding: 18px; }
+  #dashboardPanel .empty-row.empty-row--error td { color: #922b21; }
   #dashboardPanel .db-msg { padding: 10px 14px; border-radius: 6px; background: #fadbd8; color: #922b21; display: none; margin-bottom: 15px; }
   #dashboardPanel .db-toolbar { display: flex; justify-content: flex-end; gap: 10px; align-items: flex-start; position: relative; }
   #dashboardPanel .refresh-btn, #dashboardPanel .filter-btn { border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.85em; cursor: pointer; color: #fff; }
@@ -230,6 +231,22 @@
   // Every view — filtered or not — goes through the SAME live-computed
   // getDashboardData() call now (see the comment in Code.gs's DASHBOARD API
   // section for why the old dual-path split was retired).
+  //
+  // ROBUSTNESS (fix for "Action Required / Upcoming Doses stuck on
+  // Loading…"): previously, if anything inside the success handler threw
+  // (e.g. an unexpected/missing field in the response) the browser
+  // swallowed that error silently — nothing on screen ever changed, and
+  // the tables were left showing "Loading…" forever with no way to tell
+  // a slow request apart from a broken one. This version (a) always
+  // resets every panel to a real loading state on each call so a retry
+  // after an error doesn't show stale content, (b) wraps every render
+  // call in try/catch so a rendering bug reports a visible error instead
+  // of hanging silently, and (c) runs a watchdog timer that tells the
+  // user plainly if a request is taking unusually long, instead of
+  // leaving them staring at "Loading…" with no feedback at all.
+  var vxLoadSeq = 0;
+  var VX_LOAD_TIMEOUT_MS = 20000;
+
   function vxLoadDashboard(mode, filterValue) {
     vxDashboardLoaded = true;
     vxFilterMode = mode || 'none';
@@ -237,23 +254,76 @@
     vxHideDbMsg();
     vxUpdateFilterStatusUI();
 
+    var seq = ++vxLoadSeq;
+    var vxStatsRequestDone = false;
+    var vxDeptRequestDone = false;
+
+    // Reset every panel to a real "loading" state on every request — a
+    // refresh after an earlier error/timeout must not leave stale content
+    // (or a stale error row) sitting on screen looking like live data.
+    document.getElementById('actionTable').innerHTML = '<tr class="empty-row"><td colspan="9">Loading…</td></tr>';
+    document.getElementById('upcomingTable').innerHTML = '<tr class="empty-row"><td colspan="8">Loading…</td></tr>';
+    document.getElementById('deptTable').innerHTML = '<tr class="empty-row"><td colspan="6">Loading…</td></tr>';
+
+    setTimeout(function () {
+      if (seq !== vxLoadSeq) return; // a newer refresh already superseded this one
+      if (vxStatsRequestDone && vxDeptRequestDone) return; // both already resolved, one way or another
+      vxDbErr({ message: 'The dashboard is taking longer than expected to load. Your connection or the spreadsheet may be slow right now — click 🔄 Refresh to try again.' });
+    }, VX_LOAD_TIMEOUT_MS);
+
     google.script.run
       .withSuccessHandler(function (result) {
-        vxRenderStats(result.stats);
-        vxRenderAction(result.actionRequired);
-        vxRenderUpcoming(result.upcomingDoses);
+        if (seq !== vxLoadSeq) return;
+        vxStatsRequestDone = true;
+        try {
+          vxRenderStats(result && result.stats);
+          vxRenderAction(result && result.actionRequired);
+          vxRenderUpcoming(result && result.upcomingDoses);
+        } catch (e) {
+          vxDbErr({ message: 'Could not display the dashboard data: ' + e.message });
+          vxRenderErrorRow('actionTable', 9);
+          vxRenderErrorRow('upcomingTable', 8);
+        }
       })
-      .withFailureHandler(vxDbErr)
+      .withFailureHandler(function (err) {
+        if (seq !== vxLoadSeq) return;
+        vxStatsRequestDone = true;
+        vxDbErr(err);
+        vxRenderErrorRow('actionTable', 9);
+        vxRenderErrorRow('upcomingTable', 8);
+      })
       .getDashboardData(vxFilterMode, vxFilterValue);
 
     // The Department Follow-Up Summary always shows every department — it
     // is not affected by the Filter By selection (see note in the UI).
-    google.script.run.withSuccessHandler(vxRenderDepartments).withFailureHandler(vxDbErr).getDepartmentSummary();
+    google.script.run
+      .withSuccessHandler(function (rows) {
+        if (seq !== vxLoadSeq) return;
+        vxDeptRequestDone = true;
+        try {
+          vxRenderDepartments(rows);
+        } catch (e) {
+          vxDbErr({ message: 'Could not display the department summary: ' + e.message });
+          vxRenderErrorRow('deptTable', 6);
+        }
+      })
+      .withFailureHandler(function (err) {
+        if (seq !== vxLoadSeq) return;
+        vxDeptRequestDone = true;
+        vxDbErr(err);
+        vxRenderErrorRow('deptTable', 6);
+      })
+      .getDepartmentSummary();
+  }
+
+  function vxRenderErrorRow(tbodyId, colspan) {
+    document.getElementById(tbodyId).innerHTML =
+      '<tr class="empty-row empty-row--error"><td colspan="' + colspan + '">⚠️ Could not load — click 🔄 Refresh to try again.</td></tr>';
   }
 
   function vxDbErr(err) {
     var el = document.getElementById('db-message');
-    el.textContent = 'ERROR loading dashboard: ' + err.message;
+    el.textContent = 'ERROR loading dashboard: ' + (err && err.message ? err.message : 'Unknown error.');
     el.style.display = 'block';
   }
   function vxHideDbMsg() { document.getElementById('db-message').style.display = 'none'; }
@@ -369,7 +439,11 @@
     }
   });
 
+  // s defaults to {} so a malformed/missing stats payload renders as
+  // zeros instead of throwing (which used to silently abort the rest of
+  // this success handler — see the comment on vxLoadDashboard above).
   function vxRenderStats(s) {
+    s = s || {};
     document.getElementById('stats').innerHTML =
       vxStatCard(s.activeRecipients, 'Active Recipients') +
       vxStatCard(s.vaccinatedRecipients, 'Vaccinated Recipients') +
@@ -385,7 +459,7 @@
       vxStatCard(s.future, 'Future', 'future');
   }
   function vxStatCard(value, label, cls) {
-    return '<div class="stat-card ' + (cls || '') + '"><div class="number">' + (value === '' || value === undefined ? '0' : value) + '</div><div class="label">' + label + '</div></div>';
+    return '<div class="stat-card ' + (cls || '') + '"><div class="number">' + (value === '' || value === undefined || value === null ? '0' : value) + '</div><div class="label">' + label + '</div></div>';
   }
 
   function vxRenderAction(rows) {
