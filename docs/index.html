@@ -101,10 +101,10 @@
   #entryPanel .form-row select:disabled { background: #eef1f6 !important; color: #2c3e50; cursor: not-allowed; opacity: 0.85; }
   #entryPanel .btn-row { margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap; }
   #entryPanel .btn { padding: 12px 28px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.15s; color: #fff; }
-  #entryPanel .btn-success { background: var(--vx-green); }
-  #entryPanel .btn-success:hover { filter: brightness(0.92); }
-  #entryPanel .btn-warning { background: #f39c12; }
-  #entryPanel .btn-warning:hover { filter: brightness(0.92); }
+  .btn-success { background: var(--vx-green); }
+  .btn-success:hover { filter: brightness(0.92); }
+  .btn-warning { background: #f39c12; }
+  .btn-warning:hover { filter: brightness(0.92); }
   #entryPanel .btn:disabled { opacity: 0.7; cursor: not-allowed; }
   #entryPanel .msg { padding: 10px 14px; margin: 15px 0; border-radius: 6px; display: none; font-size: 0.92em; }
   #entryPanel .msg-success { background: #d5f5e3; color: #1a7a4a; border: 1px solid #82e0aa; }
@@ -263,6 +263,48 @@
   .ar-modal .msg { padding: 10px 14px; margin: 12px 0 0; border-radius: 6px; font-size: 0.88em; }
   .ar-modal .msg-success { background: #d5f5e3; color: #1a7a4a; border: 1px solid #82e0aa; }
   .ar-modal .msg-error { background: #fadbd8; color: #922b21; border: 1px solid #f1948a; }
+
+  /* Help widget — floating button + panel */
+  .vx-help-fab {
+    position: fixed; right: 22px; bottom: 22px; width: 56px; height: 56px; border-radius: 50%;
+    background: var(--vx-navy); color: #fff; border: none; font-size: 1.5em; cursor: pointer;
+    box-shadow: 0 6px 18px rgba(15,28,74,0.35); z-index: 900; transition: 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .vx-help-fab:hover { background: var(--vx-navy-dark); transform: scale(1.05); }
+  .vx-help-panel {
+    position: fixed; right: 22px; bottom: 90px; width: 340px; max-width: calc(100vw - 44px);
+    max-height: 70vh; background: #fff; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+    z-index: 900; display: none; flex-direction: column; overflow: hidden;
+  }
+  .vx-help-panel.open { display: flex; }
+  .vx-help-header { background: var(--vx-navy); color: #fff; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .vx-help-header h4 { margin: 0; font-size: 0.95em; }
+  .vx-help-header button { background: none; border: none; color: #fff; font-size: 1.1em; cursor: pointer; opacity: 0.85; }
+  .vx-help-header button:hover { opacity: 1; }
+  .vx-help-body { padding: 12px 16px; overflow-y: auto; flex: 1; }
+  .vx-help-body h5 { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.04em; color: #8a97ab; margin: 10px 0 6px; }
+  .vx-faq-item { border-bottom: 1px solid #eef1f6; }
+  .vx-faq-q { width: 100%; text-align: left; background: none; border: none; padding: 9px 2px; font-size: 0.85em; font-weight: 600; color: #2c3e50; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .vx-faq-q:hover { color: var(--vx-teal); }
+  .vx-faq-a { display: none; padding: 0 2px 10px; font-size: 0.82em; color: #5b6670; line-height: 1.45; }
+  .vx-faq-item.open .vx-faq-a { display: block; }
+  .vx-faq-item.open .vx-faq-caret { transform: rotate(180deg); }
+  .vx-faq-caret { transition: 0.15s; font-size: 0.8em; flex-shrink: 0; }
+  .vx-help-type-toggle { display: flex; gap: 6px; margin-bottom: 8px; }
+  .vx-help-type-btn { flex: 1; background: none; border: 1px solid #dbe1ea; color: #6b7a90; padding: 7px 6px; border-radius: 6px; font-size: 0.78em; font-weight: 600; cursor: pointer; }
+  .vx-help-type-btn.active { background: var(--vx-navy); border-color: var(--vx-navy); color: #fff; }
+  .vx-help-contact textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #dbe1ea; border-radius: 6px; font-size: 0.85em; font-family: inherit; resize: vertical; min-height: 60px; }
+  .vx-help-contact select { width: 100%; box-sizing: border-box; padding: 7px 10px; border: 1px solid #dbe1ea; border-radius: 6px; font-size: 0.85em; margin: 6px 0; }
+  .vx-help-contact .btn { width: 100%; padding: 9px; font-size: 0.85em; margin-top: 4px; }
+  .vx-help-msg { font-size: 0.8em; padding: 6px 8px; border-radius: 6px; margin-top: 6px; display: none; }
+  .vx-help-msg.show { display: block; }
+  .vx-help-msg--success { background: #d5f5e3; color: #1a7a4a; }
+  .vx-help-msg--error { background: #fadbd8; color: #922b21; }
+  @media (max-width: 480px) {
+    .vx-help-panel { right: 12px; left: 12px; width: auto; bottom: 84px; }
+    .vx-help-fab { right: 14px; bottom: 14px; }
+  }
 </style>
 </head>
 <body>
@@ -310,6 +352,10 @@
               <option value="Meridian Mobile Unit - Fairhaven">Meridian Mobile Unit - Fairhaven</option>
               <option value="Meridian Clinic - Brookstone">Meridian Clinic - Brookstone</option>
             </select>
+            <span class="info-icon" id="siteInfoToggle" role="button" tabindex="0" aria-label="Show help">&#9432;</span>
+          </div>
+          <div id="siteHelperText" class="ef-helper-tooltip" style="display:none;">
+            &#128161; In the real app this is a free-text field: you type the site (e.g. "MTC White Plains - QC") and it's checked against known sites with typo-tolerant autocorrection, pre-filled from your last entry. Simplified to a dropdown here for the demo.
           </div>
           <div class="ef-helper">Sample sites shown for demo purposes only.</div>
         </div>
@@ -738,6 +784,7 @@
     setTimeout(efHideMessage, 1800);
     setupInfoToggle('recipientSearchInfo', 'recipientSearchHelper');
     setupInfoToggle('addRecipientInfo', 'addRecipientHelper');
+    setupInfoToggle('siteInfoToggle', 'siteHelperText');
     efDispositionChanged();
   })();
 
@@ -1257,6 +1304,145 @@
   document.getElementById('pdfModalOverlay').addEventListener('click', function (e) {
     if (e.target === this) vxClosePdfModal();
   });
+
+  // ============================================================
+  // HELP WIDGET
+  // ============================================================
+  var VX_FAQS = [
+    {
+      q: 'Why is the Intended Dose Number locked and I can\'t change it?',
+      a: 'The system checked this recipient\'s vaccination history (or the vaccine\'s schedule, if this is their first dose) and pre-filled the correct next dose — it locks automatically so it can\'t be accidentally changed. If you genuinely believe it\'s wrong, re-select the Vaccine Type or Schedule to re-run the check, or contact IT Support below if it still looks incorrect.'
+    },
+    {
+      q: 'The Site of Vaccination field changed what I typed.',
+      a: 'This form auto-corrects small typos in the site name against known sites (e.g. missing province, misspelling) and shows a notice when it does. If the correction is wrong, you can still edit the field manually — it isn\'t locked.'
+    },
+    {
+      q: 'I got a "Recipient name lookup mismatch" error when saving.',
+      a: 'This means two different recipients in the system share the exact same name, and the sheet resolved your entry to the wrong one. The record was NOT saved. Please contact your administrator or IT Support so the duplicate can be reviewed before you try again.'
+    },
+    {
+      q: 'The Lot Number field is blocking my save.',
+      a: 'Lot Number is checked against the selected Brand and Expiry Date for consistency. If you\'re sure the lot number is correct as typed, double-check the Brand and Expiry Date fields match what\'s actually on the vial — a mismatch there is the most common cause.'
+    },
+    {
+      q: 'I see a warning that a vaccine should be given SC, not IM (or vice versa).',
+      a: 'Certain vaccines (currently MMR, Varicella, and Imojev) show a warning if the Route of Administration doesn\'t match the conventional route. This is a warning only, not a hard block — you can still save the record as entered if you\'re confident it\'s correct.'
+    },
+    {
+      q: 'I added a new recipient and got a duplicate-name warning.',
+      a: 'The system found an existing recipient with the exact same name. If this is genuinely a different person, click "Add Anyway" to save them as a new, separate recipient. If it\'s the same person, cancel and select the existing recipient from the dropdown instead.'
+    },
+    {
+      q: 'The recipient I need isn\'t showing up in the dropdown.',
+      a: 'By default the dropdown only shows recipients from your current Site of Vaccination\'s province. Use the 🔎 search box next to it to search every recipient in the system regardless of province. If they still don\'t appear, they may not be in Recipients_Master yet — use "➕ Add New Recipient" to create them.'
+    },
+    {
+      q: 'How do I know when the system is looking something up in the background?',
+      a: 'Whenever a background lookup could change or pre-fill a field for you — checking this recipient\'s history, loading brand/schedule options, working out a starting dose, or checking the site spelling — a small "🔄 …" note appears just above that part of the form while it\'s running, and disappears once it\'s done (or turns into an error/hint message if something needs your attention). If you don\'t see one, the system isn\'t currently searching for that field.'
+    }
+  ];
+
+  function vxRenderFaqs() {
+    var list = document.getElementById('vxFaqList');
+    list.innerHTML = '';
+    VX_FAQS.forEach(function (faq, i) {
+      var item = document.createElement('div');
+      item.className = 'vx-faq-item';
+      var qBtn = document.createElement('button');
+      qBtn.type = 'button';
+      qBtn.className = 'vx-faq-q';
+      qBtn.innerHTML = '<span>' + faq.q + '</span><span class="vx-faq-caret">▾</span>';
+      qBtn.onclick = function () { item.classList.toggle('open'); };
+      var aDiv = document.createElement('div');
+      aDiv.className = 'vx-faq-a';
+      aDiv.textContent = faq.a;
+      item.appendChild(qBtn);
+      item.appendChild(aDiv);
+      list.appendChild(item);
+    });
+  }
+  vxRenderFaqs();
+
+  function vxToggleHelpPanel() {
+    document.getElementById('vxHelpPanel').classList.toggle('open');
+  }
+
+  function vxShowHelpMsg(text, type) {
+    var el = document.getElementById('vxHelpMsg');
+    el.textContent = text;
+    el.className = 'vx-help-msg show vx-help-msg--' + type;
+  }
+
+  var vxHelpTicketType = 'help';
+  function vxSetHelpTicketType(type) {
+    vxHelpTicketType = (type === 'bug') ? 'bug' : 'help';
+    document.getElementById('vxHelpTypeBtnHelp').classList.toggle('active', vxHelpTicketType === 'help');
+    document.getElementById('vxHelpTypeBtnBug').classList.toggle('active', vxHelpTicketType === 'bug');
+    var msgBox = document.getElementById('vxHelpMessage');
+    var submitBtn = document.getElementById('vxHelpSubmitBtn');
+    if (vxHelpTicketType === 'bug') {
+      msgBox.placeholder = 'What were you doing when it happened? What did you expect, and what actually happened?';
+      submitBtn.textContent = '📨 Send Bug Report';
+    } else {
+      msgBox.placeholder = "Describe the issue you're running into...";
+      submitBtn.textContent = '📨 Contact IT Support';
+    }
+  }
+
+  function vxSubmitHelpTicket() {
+    var message = document.getElementById('vxHelpMessage').value.trim();
+    var priority = document.getElementById('vxHelpPriority').value;
+    if (!message) {
+      vxShowHelpMsg(vxHelpTicketType === 'bug' ? 'Please describe what happened before submitting.' : 'Please describe the issue before submitting.', 'error');
+      return;
+    }
+    var btn = document.getElementById('vxHelpSubmitBtn');
+    var originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    var isBug = vxHelpTicketType === 'bug';
+    // Demo only — there is no real IT Support backend here, so this just
+    // simulates the round trip instead of calling google.script.run.
+    setTimeout(function () {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+      document.getElementById('vxHelpMessage').value = '';
+      vxShowHelpMsg((isBug ? '✅ Bug report sent to IT Support.' : '✅ Sent to IT Support. They\'ll follow up with you directly.') + ' (Demo only — no ticket was actually created.)', 'success');
+    }, 700);
+  }
 </script>
+<!-- ============================================================
+     HELP WIDGET
+     ============================================================ -->
+<button type="button" class="vx-help-fab" id="vxHelpFab" onclick="vxToggleHelpPanel()" aria-label="Help">❓</button>
+
+<div class="vx-help-panel" id="vxHelpPanel">
+  <div class="vx-help-header">
+    <h4>Need Help?</h4>
+    <button type="button" onclick="vxToggleHelpPanel()" aria-label="Close">✕</button>
+  </div>
+  <div class="vx-help-body">
+    <h5>Common Issues</h5>
+    <div id="vxFaqList"></div>
+
+    <h5>Still stuck?</h5>
+    <div class="vx-help-type-toggle">
+      <button type="button" class="vx-help-type-btn active" id="vxHelpTypeBtnHelp" onclick="vxSetHelpTicketType('help')">❓ General Question</button>
+      <button type="button" class="vx-help-type-btn" id="vxHelpTypeBtnBug" onclick="vxSetHelpTicketType('bug')">🐛 Report a Bug</button>
+    </div>
+    <div class="vx-help-contact">
+      <textarea id="vxHelpMessage" placeholder="Describe the issue you're running into..."></textarea>
+      <select id="vxHelpPriority">
+        <option value="normal">Priority: Normal</option>
+        <option value="low">Priority: Low</option>
+        <option value="high">Priority: High</option>
+        <option value="urgent">Priority: Urgent</option>
+      </select>
+      <button type="button" class="btn btn-primary" id="vxHelpSubmitBtn" onclick="vxSubmitHelpTicket()">📨 Contact IT Support</button>
+      <div id="vxHelpMsg" class="vx-help-msg"></div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
