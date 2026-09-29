@@ -1,6 +1,6 @@
 /**************************************************************
  * VxSync – Backend (Code.gs)
- * Client Worksite Vaccination Program
+ * PQ HealthShield Worksite Vaccination Program
  *
  * ARCHITECTURE NOTES (read before editing):
  *
@@ -54,7 +54,7 @@
 //      in the external multi-client tracking spreadsheet.
 // ============================================================
 const CONFIG = {
-  clientName: '[COMPANY_NAME]',
+  clientName: 'PQ HealthShield',
 
   // --- Branding shown in Index.html's header. All optional — sensible
   // defaults kick in if left blank, so a new client deployment only needs
@@ -74,8 +74,8 @@ const CONFIG = {
   // getVaccinatorEmailSet_/getUserRole below). Add an email here only for
   // someone who needs encoder access but isn't in Vaccinators_Master for
   // some reason.
-  nurseEmails: ['nurse1@company.com', 'nurse2@company.com'],
-  adminEmails: ['admin1@company.com', 'admin2@company.com', 'admin3@company.com', 'admin4@company.com', 'admin5@company.com', 'wellness@company.com', 'admin6@company.com', 'admin7@company.com', 'admin8@company.com'],
+  nurseEmails: ['nurse1@company.com', 'nurse2@company.com', 'maria_katarina_tria@dlsu.edu.ph', 'kat.tria10@gmail.com'],
+  adminEmails: ['manny.tria@mypqh.com', 'eat-jr@mypqh.com', 'vitria@mypqh.com', 'mroces@mypqh.com', 'matria@mypqh.com', 'wellness@mypqh.com', 'arlene.alcon@mypqh.com', 'danica.tria@mypqh.com', 'maria_katarina_tria@dlsu.edu.ph', 'kat.tria10@gmail.com', 'eat@mypqh.com'],
   clientEmails: ['client@company.com'],
 
   // --- Optional starting site suggestion per nurse. ---
@@ -89,12 +89,12 @@ const CONFIG = {
   // DUMMY VALUES FOR TESTING — these three sites are picked from the messy
   // free-text values already sitting in Vaccination_Tracker column Y
   // ("MTC Whiteplains" / "MTC WHITEPLAINS" / "MTC Quezon City" / "MTC QC" /
-  // "Head Office" / "Main Office QC" / "Main Office" — all typed by
+  // "PQH Head Office" / "PQH Main Office QC" / "Main Office" — all typed by
   // hand before this interface existed).
   encoderSiteMap: {
-    'nurse1@company.com': 'Head Office',
+    'nurse1@company.com': 'PQH Head Office',
     'nurse2@company.com': 'MTC Quezon City',
-    'nurse3@company.com': 'MTC Whiteplains'
+    'maria_katarina_tria@dlsu.edu.ph': 'MTC Whiteplains'
   },
 
   // --- Hub SSO integration ---
@@ -182,7 +182,7 @@ function doGet(e) {
     return htmlWithFavicon_(
       '<div style="font-family:sans-serif; max-width:480px; margin:80px auto; text-align:center; color:#333;">' +
       '<h1 style="color:#1a4d8f;">Please open VxSync from the Hub</h1>' +
-      '<p>This link only works when you launch it from inside the ' + CONFIG.clientName + ' Hub - ' +
+      '<p>This link only works when you launch it from inside the PQ HealthShield Hub - ' +
       'log in there and use the "Launch Entry Form" / "Admin Dashboard" button for this ' +
       'client instead of opening this address directly.</p>' +
       (CONFIG.hubLoginUrl && CONFIG.hubLoginUrl.indexOf('YOUR-HUB-SITE') === -1
@@ -686,44 +686,315 @@ function getRecipientDetails(recipientId) {
 }
 
 // --- Vaccine Schedule ---
-function getVaccineTypes() {
+// CHANGED (Live Lot Inventory feature): both getVaccineTypes() and
+// getBrands() now take an optional siteText and, once a client has
+// actually started using Lot_Expiry_Master (see isLotInventoryActive_
+// below), narrow their results to only what logistics has Ready stock
+// for in that site's region — same "PROVINCE" detection already used for
+// Site of Vaccination elsewhere (extractProvinceFromVaccinationSite_).
+// A client that hasn't added/populated that sheet yet gets the exact
+// same unfiltered, Vaccine_Schedule_Master-only behavior as before —
+// this is purely additive, never a breaking change for an existing
+// deployment that isn't using live inventory.
+function getVaccineTypes(siteText) {
   assertCanEncode_();
   try {
     const ss = getSheet_();
     const sheet = ss.getSheetByName('Vaccine_Schedule_Master');
     if (!sheet) throw new Error('Vaccine_Schedule_Master sheet not found');
     const data = sheet.getDataRange().getValues();
-    const types = new Set();
+    const allTypes = new Set();
     for (let i = 1; i < data.length; i++) {
       const type = data[i][0];
-      if (type && isYes_(data[i][20])) types.add(type);
+      if (type && isYes_(data[i][20])) allTypes.add(type);
     }
-    return Array.from(types).sort();
+    if (!isLotInventoryActive_()) {
+      return { types: Array.from(allTypes).sort(), inventoryActive: false, province: '' };
+    }
+    const province = extractProvinceFromVaccinationSite_(siteText);
+    if (!province) {
+      // Inventory tracking is on for this client, but we can't tell which
+      // region's stock to show yet — the caller (EntryForm.html) should
+      // prompt the encoder to enter Site of Vaccination first, exactly
+      // like the existing "site-first" recipient/vaccinator filtering.
+      return { types: [], inventoryActive: true, province: '' };
+    }
+    const selectableRows = readSelectableLotRows_(province);
+    const inventoryTypes = new Set(selectableRows.map(function (r) { return r.type; }));
+    const types = Array.from(allTypes).filter(function (t) { return inventoryTypes.has(t); }).sort();
+    return { types: types, inventoryActive: true, province: province };
   } catch (e) {
     console.error('getVaccineTypes error:', e);
     throw e;
   }
 }
 
-function getBrands(vaccineType) {
+function getBrands(vaccineType, siteText) {
   assertCanEncode_();
   try {
     const ss = getSheet_();
     const sheet = ss.getSheetByName('Vaccine_Schedule_Master');
     if (!sheet) throw new Error('Vaccine_Schedule_Master sheet not found');
     const data = sheet.getDataRange().getValues();
-    const brands = new Set();
+    const allBrands = new Set();
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
       if (row[0] === vaccineType && isYes_(row[20]) && row[2]) {
-        brands.add(row[2]);
+        allBrands.add(row[2]);
       }
     }
-    return Array.from(brands).sort();
+    if (!isLotInventoryActive_()) {
+      return { brands: Array.from(allBrands).sort(), inventoryActive: false };
+    }
+    const province = extractProvinceFromVaccinationSite_(siteText);
+    if (!province) {
+      return { brands: [], inventoryActive: true };
+    }
+    const selectableRows = readSelectableLotRows_(province).filter(function (r) { return r.type === vaccineType; });
+    const inventoryBrands = new Set(selectableRows.map(function (r) { return r.brand; }));
+    const brands = Array.from(allBrands).filter(function (b) { return inventoryBrands.has(b); }).sort();
+    return { brands: brands, inventoryActive: true };
   } catch (e) {
     console.error('getBrands error:', e);
     throw e;
   }
+}
+
+// ============================================================
+//  LIVE LOT INVENTORY (Lot_Expiry_Master)
+//  Per client instruction: logistics pre-loads all vaccine stock for a
+//  program into Lot_Expiry_Master (one row per physical, individually
+//  claimable dose/unit) before the program begins. The entry form then
+//  offers ONLY Type -> Brand -> Lot combinations that have SELECTABLE
+//  stock (Ready or Hold — see below, only "Used Up" excludes a row) in
+//  the same region as the encoder's typed Site of Vaccination — Expiry
+//  Date always comes along automatically from whichever Lot is picked,
+//  never typed by the encoder.
+//
+//  Availability has three states, and — per client clarification — only
+//  two of them mean anything different in terms of what's selectable:
+//   - "Ready" (or blank — see normalizeLotAvailability_): untouched stock.
+//   - "Hold": a specific unit was already picked for a patient whose
+//     entry did NOT end up "Administered" (Deferred/Declined/No-show/
+//     Contraindicated) — the physical dose was never actually given, so
+//     it is STILL fully selectable by anyone (that patient's next visit,
+//     or a different patient entirely). "Hold" is purely an informational
+//     flag ("someone already touched this specific unit once") visible
+//     both in the raw sheet and in the entry form's Lot dropdown — it is
+//     NOT a quarantine/lock the way it might sound.
+//   - "Used Up": a real, "Administered" dose was drawn from this unit.
+//     This is the ONLY status that removes a row from selection —
+//     see claimLotInventoryUnit_ below.
+//
+//  Column layout below matches the real workbook (Lot_Expiry_Master
+//  header row 5, data starting row 6) and the company's own
+//  VxSync_Lot_Dropdown.gs (same firstRow: 6, same Availability values).
+// ============================================================
+const LOT_SHEET_NAME = 'Lot_Expiry_Master';
+const LOT = {
+  FIRST_ROW: 6,
+  SESSION_REF: 1,     // A — Session ID / Order Ref (stamped with the Vaccination Record ID on claim)
+  VACCINATION_DATE: 2,// B — Vaccination Date (stamped on claim)
+  SITE: 3,            // C — Site of Vaccination ("Site Name - PROVINCE", same convention as the entry form)
+  VACCINE_TYPE: 4,    // D
+  VACCINE_BRAND: 5,   // E
+  LOT_NUMBER: 6,      // F
+  EXPIRY_DATE: 7,     // G
+  AVAILABILITY: 8     // H — Ready / Hold / Used Up (blank counts as Ready — see normalizeLotAvailability_)
+};
+
+function getLotSheet_() {
+  return getSheet_().getSheetByName(LOT_SHEET_NAME);
+}
+
+// Logistics enters everything as Ready by default and is never required
+// to type the word "Ready" itself (per client instruction — "everything
+// should be defaulted to ready"). Rather than installing an onEdit
+// trigger to physically write "Ready" into blank cells (a separate,
+// heavier mechanism — see the company's own VxSync_Lot_Dropdown.gs for
+// that style of trigger, intentionally not duplicated here), a blank
+// Availability cell is just treated as "Ready" at read time everywhere
+// below. The cell only gets a literal value written to it by
+// claimLotInventoryUnit_, when it becomes "Hold" or "Used Up".
+function normalizeLotAvailability_(raw) {
+  const v = String(raw || '').trim();
+  return v ? v : 'Ready';
+}
+
+// The only Availability value that removes a row from selection — see
+// the comment block above. "Ready", blank, and "Hold" are all selectable.
+function isLotSelectable_(raw) {
+  return normalizeLotAvailability_(raw).toLowerCase() !== 'used up';
+}
+
+// True once a client has actually started using this feature (their copy
+// of the master Sheet has the tab AND logistics has loaded at least one
+// row) — everything above degrades to the pre-existing, unfiltered
+// behavior for any client where either isn't true yet, so this is purely
+// additive and can never break an existing/legacy deployment.
+function isLotInventoryActive_() {
+  const sheet = getLotSheet_();
+  if (!sheet) return false;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < LOT.FIRST_ROW) return false;
+  const data = sheet.getRange(LOT.FIRST_ROW, 1, lastRow - LOT.FIRST_ROW + 1, LOT.AVAILABILITY).getValues();
+  return data.some(function (row) { return !!row[LOT.VACCINE_TYPE - 1]; });
+}
+
+// Reads every currently-SELECTABLE (Ready or Hold — see isLotSelectable_),
+// region-matched row ONCE so getVaccineTypes/getBrands/getInventoryLots
+// all agree on the same snapshot within a single round trip, rather than
+// three separate reads of a sheet logistics could be editing at the same
+// moment.
+// The literal text after the last "-" in a site string, lowercased/
+// trimmed, WITHOUT running it through PROVINCE_ALIASES — i.e. "QC" stays
+// "qc", it does not become "Metro Manila". Used only to tell an EXACT
+// site-text match apart from a same-province-but-different-text match
+// (see the priority field in getInventoryLots below) — never used for
+// the actual province bucketing itself, which is still
+// extractProvinceFromVaccinationSite_/normalizeProvince_ everywhere.
+function extractRawRegionSuffix_(siteText) {
+  if (!siteText) return null;
+  const idx = String(siteText).lastIndexOf('-');
+  if (idx === -1) return null;
+  const raw = String(siteText).substring(idx + 1).trim();
+  return raw ? raw.toLowerCase() : null;
+}
+
+function readSelectableLotRows_(province) {
+  const sheet = getLotSheet_();
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < LOT.FIRST_ROW) return [];
+  const data = sheet.getRange(LOT.FIRST_ROW, 1, lastRow - LOT.FIRST_ROW + 1, LOT.AVAILABILITY).getValues();
+  const rows = [];
+  data.forEach(function (r, i) {
+    const type = String(r[LOT.VACCINE_TYPE - 1] || '').trim();
+    const brand = String(r[LOT.VACCINE_BRAND - 1] || '').trim();
+    const lot = String(r[LOT.LOT_NUMBER - 1] || '').trim();
+    if (!type || !brand || !lot) return; // incomplete row — not sellable yet
+    if (!isLotSelectable_(r[LOT.AVAILABILITY - 1])) return; // "Used Up" only
+    const rawSite = r[LOT.SITE - 1];
+    const rowProvince = extractProvinceFromVaccinationSite_(rawSite);
+    if (!rowProvince || rowProvince !== province) return;
+    rows.push({
+      rowNum: LOT.FIRST_ROW + i,
+      type: type,
+      brand: brand,
+      lot: lot,
+      expiry: r[LOT.EXPIRY_DATE - 1] || '',
+      onHold: normalizeLotAvailability_(r[LOT.AVAILABILITY - 1]).toLowerCase() === 'hold',
+      rawRegion: extractRawRegionSuffix_(rawSite),
+      province: rowProvince
+    });
+  });
+  return rows;
+}
+
+// Backs the Lot Number dropdown in EntryForm.html — called after Vaccine
+// Type + Brand are both chosen. Multiple rows can legitimately share the
+// same Lot Number (several physical doses drawn from one vial/batch, all
+// sharing one expiry date — completely normal, not a data problem), so
+// these are grouped into one dropdown entry per distinct Lot Number.
+// `count` is the total selectable units left (Ready + Hold — used to
+// decide whether to auto-select a lone option); `holdCount` is how many
+// of those were already touched by a non-Administered entry, surfaced in
+// the option label so the encoder sees it. Expiry Date is returned
+// alongside so the client can auto-fill/lock that field the moment a lot
+// is chosen — it is never a field the encoder types.
+//
+// PRIORITY / SORT ORDER — per client instruction: for a site like
+// "MTC X - QC", every lot in the same PROVINCE bucket ("QC" and "Metro
+// Manila" both normalize to "Metro Manila" via PROVINCE_ALIASES, so both
+// are equally in-region and both show up) should be offered, but a lot
+// whose OWN Site of Vaccination literally says "QC" (an exact match to
+// what the encoder typed, before alias normalization) should be listed
+// ahead of one that only matches via the broader "Metro Manila" bucket.
+// priority 0 = exact literal region match, 1 = same-province fallback.
+// A lot with rows at both priorities (rare — the same Lot Number logged
+// under two differently-worded sites) takes its BEST (lowest) priority.
+// `note` is set only on a priority-1 entry, so the encoder can see at a
+// glance that this stock belongs to a neighboring site under the same
+// province rather than their own exact site.
+function getInventoryLots(vaccineType, vaccineBrand, siteText) {
+  assertCanEncode_();
+  try {
+    if (!isLotInventoryActive_()) return { active: false, lots: [] };
+    const province = extractProvinceFromVaccinationSite_(siteText);
+    if (!province) return { active: true, lots: [] };
+    const targetRawRegion = extractRawRegionSuffix_(siteText);
+    const rows = readSelectableLotRows_(province).filter(function (r) {
+      return r.type === vaccineType && r.brand === vaccineBrand;
+    });
+    const byLot = {};
+    rows.forEach(function (r) {
+      if (!byLot[r.lot]) byLot[r.lot] = { lot: r.lot, expiry: formatDateForClient_(r.expiry), count: 0, holdCount: 0, priority: 1 };
+      byLot[r.lot].count++;
+      if (r.onHold) byLot[r.lot].holdCount++;
+      const exact = !!(targetRawRegion && r.rawRegion && r.rawRegion === targetRawRegion);
+      if (exact) byLot[r.lot].priority = 0;
+    });
+    const lots = Object.keys(byLot).map(function (k) { return byLot[k]; });
+    lots.forEach(function (l) {
+      if (l.priority === 1) l.note = province + ' stock (different site, same region)';
+    });
+    lots.sort(function (a, b) {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return a.lot < b.lot ? -1 : (a.lot > b.lot ? 1 : 0);
+    });
+    return { active: true, lots: lots };
+  } catch (e) {
+    console.error('getInventoryLots error:', e);
+    throw e;
+  }
+}
+
+// Called from inside saveVaccinationRecord's existing script lock (see
+// below) — re-searches Lot_Expiry_Master FRESH rather than trusting any
+// row number the client saw earlier (another encoder could have claimed
+// the specific row the client had in mind, but a different row with the
+// same Lot Number might still be free — that's an equally correct claim,
+// not a conflict), finds one still-selectable row matching exactly what
+// the encoder picked, and atomically writes `finalStatus` into it —
+// "Used Up" for a real Administered dose (excludes it from selection
+// forever), or "Hold" for anything else (Deferred/Declined/No-show/
+// Contraindicated — the physical dose was never given, so it stays fully
+// selectable; "Hold" is purely an informational flag, not a lock — see
+// isLotSelectable_/readSelectableLotRows_ above). Throws — aborting the
+// whole save, nothing appended, scratchpad untouched — only if no
+// matching selectable row is found at all, which can only happen via a
+// genuine race (two encoders submitting the same last unit at nearly the
+// same moment) since the dropdown could only have offered Lots that were
+// selectable moments earlier.
+function claimLotInventoryUnit_(vaccineType, vaccineBrand, lotNumber, siteText, vaccinationRecordId, vaccinationDate, finalStatus) {
+  const sheet = getLotSheet_();
+  if (!sheet) {
+    throw new Error('Live inventory tracking is on for this site, but the Lot_Expiry_Master sheet is missing — cannot record this vaccine lot. Please contact your administrator.');
+  }
+  const province = extractProvinceFromVaccinationSite_(siteText);
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= LOT.FIRST_ROW) {
+    const data = sheet.getRange(LOT.FIRST_ROW, 1, lastRow - LOT.FIRST_ROW + 1, LOT.AVAILABILITY).getValues();
+    for (let i = 0; i < data.length; i++) {
+      const r = data[i];
+      const type = String(r[LOT.VACCINE_TYPE - 1] || '').trim();
+      const brand = String(r[LOT.VACCINE_BRAND - 1] || '').trim();
+      const lot = String(r[LOT.LOT_NUMBER - 1] || '').trim();
+      if (type !== vaccineType || brand !== vaccineBrand || lot !== lotNumber) continue;
+      if (!isLotSelectable_(r[LOT.AVAILABILITY - 1])) continue; // already Used Up
+      const rowProvince = extractProvinceFromVaccinationSite_(r[LOT.SITE - 1]);
+      if (province && rowProvince !== province) continue;
+      const rowNum = LOT.FIRST_ROW + i;
+      sheet.getRange(rowNum, LOT.SESSION_REF).setValue(vaccinationRecordId);
+      sheet.getRange(rowNum, LOT.VACCINATION_DATE).setValue(vaccinationDate || '');
+      sheet.getRange(rowNum, LOT.AVAILABILITY).setValue(finalStatus);
+      return;
+    }
+  }
+  throw new Error(
+    'This vaccine lot ("' + lotNumber + '") is no longer available — it was likely just used in another submission. ' +
+    'Please refresh the Vaccine Type / Brand / Lot Number selection and pick again.'
+  );
 }
 
 function getSchedules(vaccineType, brand) {
@@ -876,7 +1147,7 @@ const TRACKER_COL = {
 };
 
 // Vaccine_Schedule_Master column indexes (0-based), confirmed against the
-// real workbook (the client's live workbook). Referenced by name below instead of
+// real workbook (CorpShield_VxSync). Referenced by name below instead of
 // bare numbers so the dose-history / starting-dose logic reads the same
 // way the sheet's own Vaccination_Entry!B31 "Next Dose" formula does.
 const SCHEDULE_COL = {
@@ -1310,7 +1581,7 @@ function acronymMatches_(shortText, longText) {
 // against entire known phrases with one whole-string edit-distance
 // similarity score. That's what produced a confirmed bad suggestion in
 // practice: typing "MTC Whiteplains - Quezzzon Cityy" got "Did you mean
-// 'Head Office - Quezon City'?" — a completely unrelated site — because
+// 'PQH Head Office - Quezon City'?" — a completely unrelated site — because
 // whole-string similarity only cares about OVERALL character overlap and
 // length, not which specific part is actually similar to what. Two long
 // strings can share enough characters/structure (" - ", "City", similar
@@ -1484,10 +1755,32 @@ function getAlwaysKnownSiteWords_() {
 function checkSiteTypo(typedValue) {
   assertCanEncode_();
   try {
-    return checkTypoMultiWord_(typedValue, getKnownSiteUsageCounts_(), getAlwaysKnownSiteWords_());
+    const result = checkTypoMultiWord_(typedValue, getKnownSiteUsageCounts_(), getAlwaysKnownSiteWords_());
+    // Province-recognition check runs against the POST-auto-correct value
+    // (a typo fix can change the province word itself, e.g. "Quezonn Cite"
+    // -> "Quezon City"), never the raw typed text. This is deliberately
+    // separate from the word-typo check above: an unrecognized province
+    // is not a spelling mistake the system can guess a correction for —
+    // it's either a genuine typo (right province, close enough spelling
+    // for the tier-1/2/3 word check above to already have caught it) or a
+    // legitimately new province this client hasn't used yet, which
+    // normalizeProvince_ already accepts by design (self-buckets under a
+    // title-cased version). Either way, the encoder should get a chance
+    // to double-check before saving — a soft warning, never a hard block.
+    const effectiveValue = result.correctedValue || typedValue;
+    const idx = effectiveValue ? String(effectiveValue).lastIndexOf('-') : -1;
+    const provincePart = idx === -1 ? null : String(effectiveValue).substring(idx + 1).trim();
+    const province = extractProvinceFromVaccinationSite_(effectiveValue);
+    const recognizedProvince = !!(provincePart && PROVINCE_ALIASES[normalizeLookupKey_(provincePart)]);
+    result.province = province;
+    // Only warn when a province suffix actually exists but isn't
+    // recognized — a missing suffix entirely is a separate, already-
+    // enforced hard validation at submit time, not this warning's job.
+    result.unknownProvince = !!(province && !recognizedProvince);
+    return result;
   } catch (e) {
     console.error('checkSiteTypo error:', e);
-    return { tier: 0, correctedValue: null, autoCorrections: [], suggestions: [], original: String(typedValue || '') }; // non-critical — never block the encoder over this failing
+    return { tier: 0, correctedValue: null, autoCorrections: [], suggestions: [], original: String(typedValue || ''), province: null, unknownProvince: false }; // non-critical — never block the encoder over this failing
   }
 }
 
@@ -2199,13 +2492,40 @@ function saveVaccinationRecord(record) {
     //    The rule below is reverse-engineered from the sample rows in
     //    Vaccination_Tracker for "Administered", "Deferred" and "Declined".
     //    "No-show" and "Contraindicated – Temporary/Permanent" do not appear
-    //    in any sample row — CONFIRM these two cases with the client
+    //    in any sample row — CONFIRM these two cases with PQ HealthShield
     //    before go-live; the labels below are a reasonable placeholder, not
     //    a verified spec.
     const statusPair = deriveScheduleAndReminderStatus_(record.doseDisposition, nextDose, recommendedDate);
 
     // 5) Build the Vaccination_Tracker row (36 columns, A:AJ) and append.
     const nextId = getNextTrackerId_(trackerSheet);
+
+    // 5b) Live Lot Inventory claim — only when the Lot Number actually
+    // came from the region-scoped inventory dropdown (see
+    // claimLotInventoryUnit_ above), never for a client that doesn't use
+    // this feature or an encoder who free-typed a lot. Deliberately runs
+    // here, still inside the lock acquired at the top of this function —
+    // no separate LockService call needed — and BEFORE appendRow, so a
+    // race-condition failure here aborts the whole save with nothing
+    // written to Vaccination_Tracker and the scratchpad left untouched.
+    if (record.inventoryLotClaim && record.lotNumber) {
+      // Only a real Administered dose consumes the physical unit for
+      // good ("Used Up"). Anything else (Deferred/Declined/No-show/
+      // Contraindicated) means the dose was never actually given, so the
+      // unit is flagged "Hold" — visible in the sheet and the Lot
+      // dropdown — but stays fully selectable. See claimLotInventoryUnit_
+      // for why this is safe/intentional, not a bug.
+      claimLotInventoryUnit_(
+        record.vaccineType,
+        record.vaccineBrand,
+        record.lotNumber,
+        record.location,
+        nextId,
+        record.vaccinationDate ? parseDateOnlyLocal_(record.vaccinationDate) : todayDateOnly_(),
+        record.doseDisposition === 'Administered' ? 'Used Up' : 'Hold'
+      );
+    }
+
     const row = [
       nextId,                                   // A  Vaccination Record ID
       computedRecipientId || record.recipientId,// B  Recipient ID

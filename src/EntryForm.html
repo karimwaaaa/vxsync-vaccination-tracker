@@ -8,6 +8,47 @@
     font-size: 14px; min-width: 200px;
   }
   #entryPanel .form-row textarea { height: 50px; resize: vertical; }
+  /* ============================================================
+     LOT CARD PICKER — replaces the plain <option> list for Lot
+     Number once live inventory is active. A native <select> can't
+     carry color/badges per-option in any browser, so Ready vs Hold
+     vs "different site, same region" all rendered as one flat grey
+     line of text — genuinely hard to tell apart at a glance, which
+     is exactly what an encoder scanning quickly is most likely to
+     miss. This renders the SAME data (lots array from
+     getInventoryLots) as clickable cards instead. The underlying
+     <select id="lotNumberSelect"> stays in the DOM as the real
+     source of truth (kept in sync on every card click) so nothing
+     downstream — validation, submit payload, efApplySelectedLot —
+     had to change.
+     ============================================================ */
+  #entryPanel .ef-lot-card-list { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
+  #entryPanel .ef-lot-card {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 14px; border: 2px solid var(--vx-border); border-radius: 8px;
+    background: #fff; cursor: pointer; text-align: left; font-family: inherit;
+    transition: 0.12s; width: 100%; box-sizing: border-box;
+  }
+  #entryPanel .ef-lot-card:hover { border-color: var(--vx-teal); background: #f5fcfb; }
+  #entryPanel .ef-lot-card.ef-lot-selected {
+    border-color: var(--vx-teal); background: #eafaf7;
+    box-shadow: 0 0 0 2px rgba(26,163,145,0.18);
+  }
+  #entryPanel .ef-lot-card.ef-lot-hold { border-left: 6px solid #f39c12; }
+  #entryPanel .ef-lot-card.ef-lot-ready { border-left: 6px solid #27ae60; }
+  #entryPanel .ef-lot-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  #entryPanel .ef-lot-number { font-weight: 700; color: var(--vx-navy); font-size: 0.98em; }
+  #entryPanel .ef-lot-sub { font-size: 0.82em; color: #5a6b7d; }
+  #entryPanel .ef-lot-badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex-shrink: 0; }
+  #entryPanel .ef-lot-pill {
+    display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 0.74em;
+    font-weight: 700; letter-spacing: 0.02em; white-space: nowrap;
+  }
+  #entryPanel .ef-lot-pill-ready { background: #d5f5e3; color: #1a7a4a; }
+  #entryPanel .ef-lot-pill-hold { background: #fdecc8; color: #9a6400; }
+  #entryPanel .ef-lot-pill-exact { background: #d6ecff; color: #145a94; }
+  #entryPanel .ef-lot-pill-region { background: #eee; color: #555; }
+  #entryPanel .ef-lot-empty { font-size: 0.88em; color: #5a6b7d; padding: 6px 2px; font-style: italic; }
   #entryPanel .form-row .readonly { background: #eef1f6; color: #2c3e50; }
   #entryPanel .form-row select:disabled {
     background: #eef1f6 !important;
@@ -72,7 +113,9 @@
   #entryPanel .field-group.followup { background: #eaf6f4; }
   #entryPanel .ef-invalid { border-color: #e74c3c !important; box-shadow: 0 0 0 2px rgba(231,76,60,0.25); background: #fdf2f1; }
   #entryPanel .ef-helper { font-size: 0.8em; color: #6b7a90; margin: -6px 0 12px 0; }
-  #entryPanel .ef-typo-notice { display: none; margin: -4px 0 12px; padding: 8px 12px; border-radius: 6px; font-size: 0.85em; }
+  #entryPanel .ef-typo-notice { display: none; align-items: center; gap: 10px; margin: -4px 0 12px; padding: 8px 12px; border-radius: 6px; font-size: 0.85em; }
+  #entryPanel .ef-typo-notice .ef-typo-text { flex: 1; }
+  #entryPanel .ef-typo-notice .ef-msg-close { font-size: 1em; }
   #entryPanel .ef-typo-info { background: #eaf6f4; color: #155e56; }
   #entryPanel .ef-typo-warn { background: #fff8e1; color: #8a6100; border: 1px solid #f5d78e; }
   /* Distinct from .ef-typo-info/.ef-typo-warn on purpose: this is
@@ -595,7 +638,13 @@
         <select id="schedule" required><option value="">-- Select Schedule --</option></select>
       </div>
       <div class="form-row"><label for="vaccinationDate">Vaccination Date</label><input type="date" id="vaccinationDate"></div>
-      <div class="form-row"><label for="lotNumber">Lot Number</label><input type="text" id="lotNumber"></div>
+      <div class="form-row">
+        <label for="lotNumber">Lot Number</label>
+        <select id="lotNumberSelect" style="display:none;"><option value="">-- Select Lot --</option></select>
+        <input type="text" id="lotNumber" placeholder="Type lot number">
+      </div>
+      <div id="lotCardList" class="ef-lot-card-list" style="display:none;"></div>
+      <div id="lotInventoryHint" class="ef-helper-tooltip" style="display:none;"></div>
       <div class="form-row"><label for="expiryDate">Expiry Date</label><input type="date" id="expiryDate"></div>
       <div class="form-row">
         <label for="adminSite">Administration Site</label>
@@ -894,10 +943,18 @@
   // invisible either.
   function efUpdateProvinceContext() {
     var site = document.getElementById('location').value;
+    // Live Lot Inventory options are entirely region-scoped, so a change
+    // to Site of Vaccination invalidates whatever Vaccine Type/Brand/Lot
+    // was already picked — reset that chain and reload it for the new
+    // site, exactly like the recipient/vaccinator lists already do below.
+    document.getElementById('vaccineType').value = '';
+    efResetDoseHistoryState();
+    efClearBrands(); // also clears the Lot dropdown (efClearLots)
     if (!site) {
       efCurrentProvince = '';
       efRenderRecipientOptions();
       efRenderVaccinatorOptions();
+      efLoadVaccineTypes();
       return;
     }
     var gen = ++efProvinceGen;
@@ -909,8 +966,9 @@
         efCurrentProvince = province || '';
         efRenderRecipientOptions();
         efRenderVaccinatorOptions();
+        efLoadVaccineTypes();
       })
-      .withFailureHandler(function () { if (gen === efProvinceGen) efSetProvinceLookupIndicator(false); /* non-critical */ })
+      .withFailureHandler(function () { if (gen === efProvinceGen) { efSetProvinceLookupIndicator(false); efLoadVaccineTypes(); } /* non-critical */ })
       .getProvinceForSite(site);
   }
   var efProvinceGen = 0;
@@ -941,10 +999,10 @@
     // Visible "checking" state while this reads Vaccination_Tracker's
     // history for known site spellings — otherwise the round trip is
     // invisible and it looks like nothing happened until it resolves.
-    efShowSiteNotice('🔄 Checking site spelling against known sites…', 'info');
+    efShowSiteNotice('🔄 Checking site spelling against known sites…', 'info', false);
     google.script.run
       .withSuccessHandler(function (result) {
-        if (!result || result.tier === 0) {
+        if (!result || (result.tier === 0 && !result.unknownProvince)) {
           efHideSiteNotice();
           return;
         }
@@ -974,13 +1032,26 @@
           noticeParts.push('💡 ' + sugList + ' You can still save as typed.');
         }
 
+        // Province genuinely not recognized — distinct from a word-level
+        // typo above: this fires even on a perfectly-spelled phrase whose
+        // province half just isn't one the system has seen before. Never
+        // blocks saving (a brand-new province is legitimate, not an
+        // error), but the encoder should get a chance to catch a real
+        // mistake before it silently creates a province bucket that no
+        // Site of Vaccination will ever match again.
+        if (result.unknownProvince) {
+          noticeParts.push('⚠️ "' + efEsc(result.province) + '" isn\'t a province this system recognizes yet. ' +
+            'Double-check the spelling — or if this is genuinely a new site region, you can save as typed.');
+        }
+
         if (!noticeParts.length) { efHideSiteNotice(); return; }
 
-        // If a suggestion is still pending, use the amber style even when
-        // part of the phrase was also auto-corrected — there's still
-        // something for the encoder to double-check either way.
-        var kind = (result.suggestions && result.suggestions.length) ? 'warn' : 'auto';
-        efShowSiteNotice(noticeParts.join('  '), kind);
+        // If a suggestion or an unrecognized province is still pending,
+        // use the amber style even when part of the phrase was also
+        // auto-corrected — there's still something for the encoder to
+        // double-check either way.
+        var kind = ((result.suggestions && result.suggestions.length) || result.unknownProvince) ? 'warn' : 'auto';
+        efShowSiteNotice(noticeParts.join('  '), kind, true);
       })
       .withFailureHandler(function (err) {
         // Non-critical – never block the encoder, but don't leave the
@@ -991,11 +1062,29 @@
       .checkSiteTypo(val);
   });
 
-  function efShowSiteNotice(text, kind) {
+  function efShowSiteNotice(text, kind, dismissible) {
     var el = document.getElementById('siteTypoNotice');
-    el.textContent = text;
     el.className = 'ef-typo-notice ef-typo-' + kind;
-    el.style.display = 'block';
+    el.innerHTML = '';
+    var span = document.createElement('span');
+    span.className = 'ef-typo-text';
+    span.textContent = text;
+    el.appendChild(span);
+    // The transient "Checking…" state isn't dismissible — it resolves on
+    // its own in well under a second, same reasoning as the top save/error
+    // banner's dismiss button only showing once that banner has something
+    // resolved to actually dismiss.
+    if (dismissible) {
+      var closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'ef-msg-close';
+      closeBtn.setAttribute('aria-label', 'Dismiss this notice');
+      closeBtn.title = 'Dismiss';
+      closeBtn.textContent = '✕';
+      closeBtn.onclick = efHideSiteNotice;
+      el.appendChild(closeBtn);
+    }
+    el.style.display = 'flex';
   }
 
   function efHideSiteNotice() {
@@ -1040,7 +1129,7 @@
     filtered.forEach(function (r) {
       var opt = document.createElement('option');
       opt.value = r.id;
-      opt.text = r.name + (r.province ? ' (' + r.province + ')' : '');
+      opt.text = r.name;
       select.appendChild(opt);
     });
 
@@ -1286,24 +1375,79 @@
   // ============================================================
   // VACCINE TYPES / BRANDS / SCHEDULES
   // ============================================================
+  // ============================================================
+  // LIVE LOT INVENTORY (Lot_Expiry_Master) — region-scoped Vaccine Type ->
+  // Brand -> Lot Number cascade, with Expiry Date always auto-filled from
+  // whichever Lot is chosen. Purely additive: efInventoryActive stays
+  // false (and the form behaves exactly as before, free-text Lot/Expiry)
+  // for any client that hasn't started using Lot_Expiry_Master yet.
+  // ============================================================
+  var efInventoryActive = false;
+  var efLotGen = 0;
+
   function efLoadVaccineTypes() {
+    var site = document.getElementById('location').value;
     google.script.run
-      .withSuccessHandler(function (types) {
+      .withSuccessHandler(function (result) {
+        efInventoryActive = !!(result && result.inventoryActive);
         var select = document.getElementById('vaccineType');
+        var types = (result && result.types) || [];
         select.innerHTML = '<option value="">-- Select Vaccine --</option>';
-        if (!types || types.length === 0) {
-          efShowMessage('No vaccine types found. Please check Vaccine_Schedule_Master.', 'error');
-          return;
-        }
         types.forEach(function (t) {
           var opt = document.createElement('option');
           opt.value = t; opt.text = t;
           select.appendChild(opt);
         });
+        if (efInventoryActive && !result.province) {
+          efShowInventoryHint('Enter the Site of Vaccination above first — Vaccine Type options are scoped to that site\'s region.');
+          return;
+        }
+        if (efInventoryActive && types.length === 0) {
+          efShowInventoryHint('No available vaccine inventory has been logged for this site\'s region yet. Please contact logistics.');
+          return;
+        }
+        efHideInventoryHint();
+        if (types.length === 0) {
+          efShowMessage('No vaccine types found. Please check Vaccine_Schedule_Master.', 'error');
+          return;
+        }
         efHideMessage();
+        // Per client instruction: a single available option should
+        // prefill rather than force an extra click — still visible/
+        // editable, just already chosen, exactly like the existing
+        // brand/schedule prefill pattern below.
+        if (efInventoryActive && types.length === 1 && !select.value) {
+          select.value = types[0];
+          select.dispatchEvent(new Event('change'));
+        }
       })
       .withFailureHandler(function (err) { efShowMessage('ERROR loading vaccine types: ' + err.message, 'error'); })
-      .getVaccineTypes();
+      .getVaccineTypes(site);
+  }
+
+  // Mirrors extractProvinceFromVaccinationSite_'s dash-detection exactly
+  // (last "-", non-empty text after it) so client-side validation agrees
+  // with what the server can actually resolve a region from — used both
+  // to hard-block submit (efValidateForm) and, defensively, to avoid
+  // relying on efCurrentProvince alone (which is set asynchronously and
+  // could be stale if the encoder submits before that round trip lands).
+  function efHasRegionSuffix(site) {
+    if (!site) return false;
+    var idx = site.lastIndexOf('-');
+    if (idx === -1) return false;
+    return !!site.substring(idx + 1).trim();
+  }
+
+  function efShowInventoryHint(text) {
+    var el = document.getElementById('lotInventoryHint');
+    if (!el) return;
+    el.textContent = text;
+    el.style.display = 'block';
+  }
+  function efHideInventoryHint() {
+    var el = document.getElementById('lotInventoryHint');
+    if (!el) return;
+    el.style.display = 'none';
   }
 
   document.getElementById('vaccineType').addEventListener('change', function () {
@@ -1317,14 +1461,25 @@
 
   function efLoadBrandsPlain(type, preselectBrand, preselectSchedule, gen) {
     if (gen === undefined) gen = ++efGen; // called directly (manual vaccine-type pick with no history chain) — still needs its own generation
+    var site = document.getElementById('location').value;
     google.script.run
-      .withSuccessHandler(function (brands) {
+      .withSuccessHandler(function (result) {
         if (gen !== efGen) return; // a newer selection has since superseded this lookup
+        efInventoryActive = !!(result && result.inventoryActive);
+        var brands = (result && result.brands) || [];
         var select = document.getElementById('vaccineBrand');
         select.innerHTML = '<option value="">-- Select Brand --</option>';
-        if (!brands || brands.length === 0) {
+        efClearLots();
+        if (brands.length === 0) {
+          // Dead end — no brand exists to derive a dose from, and none
+          // ever will until the encoder changes Vaccine Type. Unlock
+          // rather than leave it locked with nothing left to wait for.
+          efUnlockDoseField();
           efSetDoseLookupIndicator(false);
-          efShowMessage('No brands found for this vaccine type.', 'error');
+          if (!efInventoryActive) efShowMessage('No brands found for this vaccine type.', 'error');
+          // (inventory active + zero brands is already explained by the
+          // hint efLoadVaccineTypes shows when there's no matching stock —
+          // no need for a second, redundant error here.)
           return;
         }
         brands.forEach(function (b) {
@@ -1341,16 +1496,25 @@
           }
           select.value = preselectBrand; // prefilled ONLY — select stays a normal, fully editable dropdown
           efLoadSchedulesPlain(type, preselectBrand, preselectSchedule, gen);
+        } else if (efInventoryActive && brands.length === 1) {
+          // Single-option auto-fill, same principle as Vaccine Type above.
+          select.value = brands[0];
+          efLoadSchedulesPlain(type, brands[0], null, gen);
         } else {
           // No brand to prefill (fresh recipient/vaccine with no history)
-          // — this particular lookup chain ends here, so the indicator
-          // that's been on screen since efCheckDoseHistory started can
-          // come down now.
-          efSetDoseLookupIndicator(false);
+          // — the automatic part of this chain ends here, but Intended
+          // Dose still can't be resolved until the encoder picks a Brand
+          // and Schedule manually. Stay locked and say so explicitly
+          // instead of going quiet — a silent, freely-clickable field
+          // here is exactly what invites a pick that a later Schedule
+          // choice would then silently overwrite.
+          efLockDoseField();
+          efSetDoseLookupIndicator(true, '⏳ Waiting for you to select a Brand and Schedule above — Intended Dose will be determined automatically once both are chosen.');
         }
+        if (select.value) efLoadInventoryLots();
       })
       .withFailureHandler(function (err) { if (gen === efGen) { efSetDoseLookupIndicator(false); efShowMessage('ERROR loading brands: ' + err.message, 'error'); } })
-      .getBrands(type);
+      .getBrands(type, site);
   }
 
   function efLoadSchedulesPlain(type, brand, preselectSchedule, gen) {
@@ -1361,6 +1525,8 @@
         var select = document.getElementById('schedule');
         select.innerHTML = '<option value="">-- Select Schedule --</option>';
         if (!schedules || schedules.length === 0) {
+          // Dead end — nothing left to wait for until Brand changes.
+          efUnlockDoseField();
           efSetDoseLookupIndicator(false);
           efShowMessage('No schedules found for this brand.', 'error');
           return;
@@ -1378,11 +1544,22 @@
             select.appendChild(opt);
           }
           select.value = preselectSchedule;
+          // Programmatic .value assignment doesn't fire a native 'change'
+          // event, so nothing below auto-triggers getStartingDoseInfo —
+          // but this path only runs with a preselect when a history-driven
+          // dose was ALREADY resolved+locked synchronously back in
+          // efApplyDoseHistory, so it's genuinely safe to consider this
+          // lookup's "loading" phase done.
+          efSetDoseLookupIndicator(false);
+        } else {
+          // No schedule to prefill — the encoder still has to pick one
+          // manually before Intended Dose can be resolved. Stay locked
+          // and keep the encoder informed rather than going quiet; the
+          // 'schedule' change handler below takes over the moment they
+          // actually pick one.
+          efLockDoseField();
+          efSetDoseLookupIndicator(true, '⏳ Waiting for you to select a Schedule above — Intended Dose will be determined automatically once one is chosen.');
         }
-        // This is the true end of the "recipient/vaccine changed" lookup
-        // chain (history check -> brand load -> schedule load) — safe to
-        // hide the indicator here regardless of which branch got us here.
-        efSetDoseLookupIndicator(false);
         efUpdateFollowUpPreview();
       })
       .withFailureHandler(function (err) { if (gen === efGen) { efSetDoseLookupIndicator(false); efShowMessage('ERROR loading schedules: ' + err.message, 'error'); } })
@@ -1393,9 +1570,180 @@
     var type = document.getElementById('vaccineType').value;
     var brand = this.value;
     var gen = ++efGen; // encoder is manually overriding brand — invalidate any in-flight schedule/dose lookup tied to the previous brand
-    if (!type || !brand) { efClearSchedules(); return; }
+    if (!type || !brand) {
+      efClearSchedules(); efClearLots();
+      efLockDoseField();
+      efSetDoseLookupIndicator(true, '⏳ Waiting for you to select a Brand above — Intended Dose will be determined automatically once Brand and Schedule are chosen.');
+      return;
+    }
     efSetBrandScheduleIndicator(true);
+    // Brand just changed and Schedule hasn't been (re-)picked yet for it —
+    // stay locked and say so, rather than leaving Intended Dose open to a
+    // pick that choosing a Schedule next would silently overwrite.
+    efLockDoseField();
+    efSetDoseLookupIndicator(true, '⏳ Waiting for you to select a Schedule below — Intended Dose will be determined automatically once one is chosen.');
     efLoadSchedulesPlain(type, brand, null, gen);
+    efLoadInventoryLots();
+  });
+
+  // ------------------------------------------------------------
+  // Lot Number / Expiry Date — driven by Lot_Expiry_Master once a client
+  // has live inventory loaded (efInventoryActive). Falls back to the
+  // original free-text lotNumber/expiryDate inputs otherwise, completely
+  // untouched.
+  // ------------------------------------------------------------
+  function efClearLots() {
+    var sel = document.getElementById('lotNumberSelect');
+    sel.innerHTML = '<option value="">-- Select Lot --</option>';
+    sel.style.display = 'none';
+    var cardList = document.getElementById('lotCardList');
+    cardList.innerHTML = '';
+    cardList.style.display = 'none';
+    document.getElementById('lotNumber').style.display = '';
+    document.getElementById('lotNumber').readOnly = false;
+    document.getElementById('lotNumber').value = '';
+    document.getElementById('expiryDate').readOnly = false;
+    document.getElementById('expiryDate').value = '';
+    efHideInventoryHint();
+  }
+
+  // Escapes text dropped into card innerHTML — lot numbers/notes come
+  // from the sheet, typed by logistics, not sanitized input.
+  function efLotEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  var efLotsById = {}; // last-loaded lots, keyed by lot number, so a card click can re-run efApplySelectedLot with full data
+
+  // Single place that "picks" a lot, called from both a card click and the
+  // hidden <select>'s own change handler (kept as the real source of truth
+  // so validation/submit code downstream never had to change) — keeps the
+  // two surfaces from ever disagreeing about which lot is actually chosen.
+  function efSelectLot(lotNumber) {
+    var select = document.getElementById('lotNumberSelect');
+    select.value = lotNumber;
+    var l = efLotsById[lotNumber];
+    if (l) {
+      efApplySelectedLot(l);
+    } else {
+      document.getElementById('lotNumber').value = lotNumber;
+      document.getElementById('expiryDate').value = '';
+    }
+    efRenderLotCards(); // just re-paints selection state, doesn't re-fetch
+  }
+
+  // Renders the lots most recently loaded (efLotsById) as clickable cards.
+  // Called both right after a fresh fetch and after every selection change
+  // (to move the "selected" highlight), so it always reads current state
+  // off the hidden <select> rather than tracking a second copy of "which
+  // lot is picked" that could drift out of sync with it.
+  function efRenderLotCards() {
+    var cardList = document.getElementById('lotCardList');
+    var selected = document.getElementById('lotNumberSelect').value;
+    var lots = Object.keys(efLotsById).map(function (k) { return efLotsById[k]; });
+    if (lots.length === 0) {
+      cardList.innerHTML = '<div class="ef-lot-empty">No available Lot Numbers logged for this Vaccine Type/Brand at this site. Please contact logistics.</div>';
+      return;
+    }
+    cardList.innerHTML = lots.map(function (l) {
+      var onHold = l.holdCount > 0;
+      var cls = 'ef-lot-card ' + (onHold ? 'ef-lot-hold' : 'ef-lot-ready') + (l.lot === selected ? ' ef-lot-selected' : '');
+      var badges = '';
+      badges += onHold
+        ? '<span class="ef-lot-pill ef-lot-pill-hold">⚠ ' + l.holdCount + ' on hold</span>'
+        : '<span class="ef-lot-pill ef-lot-pill-ready">✓ Ready</span>';
+      badges += (l.priority === 0)
+        ? '<span class="ef-lot-pill ef-lot-pill-exact">Your site</span>'
+        : '<span class="ef-lot-pill ef-lot-pill-region">Same region</span>';
+      var sub = 'Exp. ' + efLotEsc(l.expiry || 'unknown');
+      sub += (l.count > 1) ? ' &nbsp;•&nbsp; ' + l.count + ' available' : '';
+      if (l.note) sub += ' &nbsp;•&nbsp; ' + efLotEsc(l.note);
+      return '<button type="button" class="' + cls + '" data-lot="' + efLotEsc(l.lot) + '" aria-pressed="' + (l.lot === selected) + '">' +
+        '<span class="ef-lot-main"><span class="ef-lot-number">' + efLotEsc(l.lot) + '</span>' +
+        '<span class="ef-lot-sub">' + sub + '</span></span>' +
+        '<span class="ef-lot-badges">' + badges + '</span></button>';
+    }).join('');
+    Array.prototype.forEach.call(cardList.querySelectorAll('.ef-lot-card'), function (btn) {
+      btn.addEventListener('click', function () { efSelectLot(btn.getAttribute('data-lot')); });
+    });
+  }
+
+  function efLoadInventoryLots() {
+    var type = document.getElementById('vaccineType').value;
+    var brand = document.getElementById('vaccineBrand').value;
+    var site = document.getElementById('location').value;
+    if (!type || !brand) { efClearLots(); return; }
+    var gen = ++efLotGen;
+    google.script.run
+      .withSuccessHandler(function (result) {
+        if (gen !== efLotGen) return; // superseded by a newer type/brand change
+        if (!result || !result.active) {
+          // This client doesn't use live inventory (or hasn't loaded any
+          // stock yet) — leave the original free-text Lot Number/Expiry
+          // Date fields exactly as they were, untouched.
+          efClearLots();
+          return;
+        }
+        var lots = result.lots || [];
+        var textInput = document.getElementById('lotNumber');
+        var select = document.getElementById('lotNumberSelect');
+        var cardList = document.getElementById('lotCardList');
+        select.innerHTML = '<option value="">-- Select Lot --</option>';
+        efLotsById = {};
+        lots.forEach(function (l) {
+          efLotsById[l.lot] = l;
+          var opt = document.createElement('option');
+          opt.value = l.lot;
+          opt.text = l.lot; // hidden data element now — cards below carry the actual display
+          opt.setAttribute('data-expiry', l.expiry || '');
+          select.appendChild(opt);
+        });
+        // Lot Number is picked from the visible card list once inventory
+        // is active — the <select> stays in the DOM but hidden, purely as
+        // the shared source-of-truth value everything else already reads.
+        select.style.display = 'none';
+        textInput.style.display = 'none';
+        textInput.readOnly = true;
+        document.getElementById('expiryDate').readOnly = true;
+        cardList.style.display = '';
+        if (lots.length === 0) {
+          textInput.value = '';
+          document.getElementById('expiryDate').value = '';
+          efRenderLotCards();
+          efShowInventoryHint('No available Lot Numbers logged for this Vaccine Type/Brand at this site. Please contact logistics.');
+          return;
+        }
+        efHideInventoryHint();
+        if (lots.length === 1) {
+          // Single available lot — per client instruction, prefill rather
+          // than force an extra click. Still shown/selected as a card, not
+          // hidden, so the encoder can see exactly what was auto-picked.
+          select.value = lots[0].lot;
+          efApplySelectedLot(lots[0]);
+          efRenderLotCards();
+        } else {
+          select.value = '';
+          textInput.value = '';
+          document.getElementById('expiryDate').value = '';
+          efRenderLotCards();
+        }
+      })
+      .withFailureHandler(function (err) { if (gen === efLotGen) efShowMessage('ERROR loading lot inventory: ' + err.message, 'error'); })
+      .getInventoryLots(type, brand, site);
+  }
+
+  function efApplySelectedLot(lot) {
+    document.getElementById('lotNumber').value = lot.lot;
+    document.getElementById('expiryDate').value = lot.expiry || '';
+  }
+
+  document.getElementById('lotNumberSelect').addEventListener('change', function () {
+    var lot = this.value;
+    var expiry = this.options[this.selectedIndex] ? this.options[this.selectedIndex].getAttribute('data-expiry') : '';
+    document.getElementById('lotNumber').value = lot;
+    document.getElementById('expiryDate').value = lot ? (expiry || '') : '';
   });
 
   function efSetBrandScheduleIndicator(active) {
@@ -1444,7 +1792,7 @@
       .getStartingDoseInfo(type, brand, schedule);
   });
 
-  function efClearBrands() { document.getElementById('vaccineBrand').innerHTML = '<option value="">-- Select Brand --</option>'; efClearSchedules(); }
+  function efClearBrands() { document.getElementById('vaccineBrand').innerHTML = '<option value="">-- Select Brand --</option>'; efClearSchedules(); efClearLots(); }
   function efClearSchedules() { document.getElementById('schedule').innerHTML = '<option value="">-- Select Schedule --</option>'; }
 
   // ============================================================
@@ -1537,7 +1885,13 @@
           efSetDoseLookupIndicator(true, '🔄 No prior history — loading Brand & Schedule options…');
           efLoadBrandsPlain(vaccineType, null, null, gen);
           efPopulateDoseOptions(null, gen);
-          efUnlockDoseField();
+          // Stays LOCKED, not unlocked, here — efLoadBrandsPlain is async
+          // and hasn't resolved Brand/Schedule yet, and until it does
+          // there's nothing for Intended Dose to be derived from either.
+          // efLoadBrandsPlain (and, after that, efLoadSchedulesPlain / the
+          // 'schedule' change handler) is what actually unlocks it once
+          // there's genuinely nothing left to wait for.
+          efLockDoseField();
           document.getElementById('adminSite').value = '';
           document.getElementById('route').value = '';
           // No recipient history to prefill Route from — fall back to a
@@ -1826,7 +2180,23 @@
   // ============================================================
   function efValidateForm() {
     var checks = [
-      { id: 'location', test: function (v) { return !!v.trim(); }, msg: 'Please enter the site of vaccination.' },
+      {
+        id: 'location',
+        test: function (v) {
+          if (!v.trim()) return false;
+          // Per client instruction: a site with no "- REGION" suffix
+          // can't submit at all — everything downstream (recipient/
+          // vaccinator filtering, and now Vaccine Type/Brand/Lot
+          // inventory scoping) silently depends on being able to detect
+          // a region from this text.
+          return efHasRegionSuffix(v);
+        },
+        msg: function () {
+          var v = document.getElementById('location').value.trim();
+          if (!v) return 'Please enter the site of vaccination.';
+          return 'Site of Vaccination must include the region after a dash, e.g. "MTC White Plains - QC". Please add the region before submitting.';
+        }
+      },
       { id: 'recipientSelect', test: function (v) { return !!v && !!efSelectedRecipient; }, msg: 'Please select a recipient.' },
       { id: 'vaccineType', test: function (v) { return !!v; }, msg: 'Please select a vaccine type.' },
       { id: 'vaccineBrand', test: function (v) { return !!v; }, msg: 'Please select a vaccine brand.' },
@@ -1850,13 +2220,48 @@
           return !!v;
         },
         msg: 'Please select a specific reason for this disposition.'
+      },
+      {
+        // Only enforced once live inventory is actually driving this
+        // field (lotCardList visible — the card picker, not the hidden
+        // <select> it's synced with) AND a dose was actually administered
+        // — a Deferred/Declined/No-show/Contraindicated entry never
+        // consumes physical stock, so no lot needs picking.
+        id: 'lotNumber',
+        test: function (v) {
+          var disp = document.getElementById('doseDisposition').value;
+          var lotDriven = document.getElementById('lotCardList').style.display !== 'none';
+          if (!lotDriven || disp !== 'Administered') return true;
+          return !!v;
+        },
+        msg: 'Please select a Lot Number for this vaccine — inventory tracking is on for this site.'
+      },
+      {
+        // A "Hold" flag (see claimLotInventoryUnit_ in Code.gs) means a
+        // specific physical unit was touched by this entry but NOT
+        // administered — Remarks is the only place that records WHY, so
+        // it's required in exactly that one case. Not required for a
+        // plain Administered claim (Used Up needs no explanation) or for
+        // a non-Administered entry that never picked a lot at all (never
+        // touched inventory, nothing to explain).
+        id: 'remarks',
+        test: function (v) {
+          var disp = document.getElementById('doseDisposition').value;
+          var lotDriven = document.getElementById('lotCardList').style.display !== 'none';
+          var lotPicked = !!document.getElementById('lotNumber').value;
+          var willHoldFlag = lotDriven && lotPicked && disp && disp !== 'Administered';
+          if (!willHoldFlag) return true;
+          return !!v.trim();
+        },
+        msg: 'This entry will flag the selected Lot Number as "Hold" (not administered) — please add a Remark explaining why (e.g. "patient declined after vial was drawn").'
       }
     ];
     for (var i = 0; i < checks.length; i++) {
       var el = document.getElementById(checks[i].id);
       if (!checks[i].test(el.value)) {
         efHighlightField(el);
-        efShowMessage(checks[i].msg, 'error');
+        var msg = typeof checks[i].msg === 'function' ? checks[i].msg() : checks[i].msg;
+        efShowMessage(msg, 'error');
         return false;
       }
     }
@@ -1918,6 +2323,14 @@
     vaccinationDate: document.getElementById('vaccinationDate').value || '',
     lotNumber: document.getElementById('lotNumber').value,
     expiryDate: document.getElementById('expiryDate').value || '',
+    // True only when the Lot Number came from the region-scoped live
+    // inventory card picker (not a free-typed value) — tells
+    // saveVaccinationRecord to atomically re-verify and flip that
+    // specific unit to "Used Up" in Lot_Expiry_Master. See
+    // efLoadInventoryLots/efClearLots above. (lotCardList, not
+    // lotNumberSelect — the <select> is now a hidden data store only;
+    // the card list is the actual visible/active picker surface.)
+    inventoryLotClaim: document.getElementById('lotCardList').style.display !== 'none' && !!document.getElementById('lotNumber').value,
     adminSite: document.getElementById('adminSite').value,
     route: document.getElementById('route').value,
     location: document.getElementById('location').value,
@@ -1968,6 +2381,16 @@
     efRenderVaccinatorOptions();
     if (!keepMessage) efHideMessage(true);
     efClearHighlight();
+    // Same site, next recipient: if inventory scoping left only one
+    // Vaccine Type option for this site, re-apply that auto-fill instead
+    // of making the encoder re-pick it for every single entry.
+    (function () {
+      var typeSelect = document.getElementById('vaccineType');
+      if (efInventoryActive && typeSelect.options.length === 2) {
+        typeSelect.value = typeSelect.options[1].value;
+        typeSelect.dispatchEvent(new Event('change'));
+      }
+    })();
   }
 
   // ============================================================
@@ -2054,6 +2477,22 @@
     {
       q: 'How do I know when the system is looking something up in the background?',
       a: 'Whenever a background lookup could change or pre-fill a field for you — checking this recipient\'s history, loading brand/schedule options, working out a starting dose, or checking the site spelling — a small "🔄 …" note appears just above that part of the form while it\'s running, and disappears once it\'s done (or turns into an error/hint message if something needs your attention). If you don\'t see one, the system isn\'t currently searching for that field.'
+    },
+    {
+      q: 'Intended Dose Number says "Waiting for you to select a Brand and Schedule…" — is that a bug?',
+      a: 'No — this is different from the field being locked WITH a value already in it. This message means the system doesn\'t have enough information yet to work out the correct dose, so it\'s deliberately holding the field empty rather than guessing. Pick a Vaccine Brand and a Schedule and it will resolve on its own — either pre-filling and locking, or unlocking for you to choose manually if no history applies.'
+    },
+    {
+      q: 'Why is Vaccine Brand empty or grayed out right after I pick a Vaccine Type?',
+      a: 'Brand options depend on the Vaccine Type you picked — the list is pulled fresh each time from the active brands under that type, so it\'s briefly empty while that lookup runs. If it stays empty afterward, that vaccine type may only have one active brand (it should auto-fill on its own in that case) or no active brands configured yet — contact IT Support if you believe a brand is missing.'
+    },
+    {
+      q: 'The lot picker now shows colored cards instead of a plain dropdown list — what do the colors and badges mean?',
+      a: 'A green left border and "Ready" badge means that lot is available to use. An amber border and "⚠ N on hold" badge means at least one unit from that lot is on hold (from a prior Deferred/Declined/No-show/Contraindicated entry) but the lot itself can still be selected. A blue "Your site" badge means that lot is stocked at your exact Site of Vaccination; a grey "Same region" badge means it\'s only available from another site in the same province as a fallback. Click any card to select it — the highlighted card is whichever one is currently chosen.'
+    },
+    {
+      q: 'A lot I expected to see is missing from the picker.',
+      a: 'A lot disappears from every dropdown as soon as it\'s fully used up (an Administered dose was recorded against it) — this is expected and means someone already claimed the last unit. If it\'s missing but you don\'t believe it should be Used Up yet, check Lot_Expiry_Master\'s Availability column for that lot, or contact your administrator.'
     }
   ];
 

@@ -121,6 +121,29 @@
   #entryPanel .ef-helper { font-size: 0.8em; color: #6b7a90; margin: -6px 0 12px 0; }
   #entryPanel .ef-typo-notice { display: none; margin: -4px 0 12px; padding: 8px 12px; border-radius: 6px; font-size: 0.85em; }
   #entryPanel .ef-typo-info { background: #eaf6f4; color: #155e56; }
+
+  /* ---- Lot inventory picker (illustrative — see docs FAQ for what's simplified) ---- */
+  #entryPanel .vx-lot-wrap { margin: 0 0 14px 214px; }
+  #entryPanel .vx-lot-hint { font-size: 0.82em; color: var(--vx-muted); margin-bottom: 8px; }
+  #entryPanel .vx-lot-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  #entryPanel .vx-lot-card {
+    border: 2px solid var(--vx-border); border-radius: 8px; padding: 10px 14px;
+    min-width: 170px; cursor: pointer; background: #fff; transition: 0.12s;
+  }
+  #entryPanel .vx-lot-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  #entryPanel .vx-lot-card.ready { border-color: var(--vx-green); }
+  #entryPanel .vx-lot-card.hold { border-color: #f39c12; }
+  #entryPanel .vx-lot-card.usedup { border-color: var(--vx-border); background: #f4f6f9; opacity: 0.55; cursor: not-allowed; }
+  #entryPanel .vx-lot-card.selected { box-shadow: 0 0 0 3px rgba(31,182,168,0.35); }
+  #entryPanel .vx-lot-card .vx-lot-num { font-weight: 700; color: var(--vx-navy); font-size: 0.95em; }
+  #entryPanel .vx-lot-card .vx-lot-exp { font-size: 0.8em; color: var(--vx-muted); margin-top: 2px; }
+  #entryPanel .vx-lot-badges { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+  #entryPanel .vx-lot-badge { font-size: 0.72em; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+  #entryPanel .vx-lot-badge.site { background: #dbe8ff; color: #1c4e80; }
+  #entryPanel .vx-lot-badge.ready { background: #d5f5e3; color: #1a7a4a; }
+  #entryPanel .vx-lot-badge.hold { background: #fdebd0; color: #9c6400; }
+  #entryPanel .vx-lot-badge.usedup { background: #e2e8f0; color: #6b7a90; text-decoration: line-through; }
+  #entryPanel .vx-lot-empty { font-size: 0.85em; color: var(--vx-muted); font-style: italic; }
   .global-search-inline { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 160px; }
   .global-search-inline .search-icon { font-size: 0.8em; color: #7f8c8d; }
   .global-search-inline input {
@@ -450,8 +473,15 @@
             <select id="schedule"><option value="">-- Select Brand First --</option></select>
           </div>
           <div class="form-row"><label for="vaccinationDate">Vaccination Date</label><input type="date" id="vaccinationDate"></div>
-          <div class="form-row"><label for="lotNumber">Lot Number</label><input type="text" id="lotNumber" placeholder="e.g. LOT-2026-0143"></div>
-          <div class="form-row"><label for="expiryDate">Expiry Date</label><input type="date" id="expiryDate"></div>
+          <div class="form-row">
+            <label>Lot Inventory</label>
+            <div class="vx-lot-wrap">
+              <div class="vx-lot-hint" id="lotPickerHint">Select a Vaccine Type and Brand above to see available lots.</div>
+              <div class="vx-lot-grid" id="lotPickerGrid"></div>
+            </div>
+          </div>
+          <div class="form-row"><label for="lotNumber">Lot Number</label><input type="text" id="lotNumber" class="readonly" placeholder="Pick a lot above" readonly></div>
+          <div class="form-row"><label for="expiryDate">Expiry Date</label><input type="date" id="expiryDate" class="readonly" readonly></div>
           <div class="form-row">
             <label for="adminSite">Administration Site</label>
             <select id="adminSite">
@@ -741,6 +771,115 @@
     }
   };
 
+  // Illustrative only — a handful of lots per brand, not a full mock of the
+  // real Lot_Expiry_Master master sheet. Shows the shape of the real app's
+  // live cascading Type -> Brand -> Lot picker (Ready / Hold / Used Up,
+  // "Your site" badge) without pretending to replicate its full data model.
+  var DEMO_LOTS = {
+    'Engerix-B': [
+      { lot: 'LOT-2026-0031', expiry: '2027-02-28', site: 'Meridian Clinic - Riverside', status: 'Ready' },
+      { lot: 'LOT-2026-0044', expiry: '2027-05-15', site: 'Meridian Clinic - Lakeview', status: 'Ready' }
+    ],
+    'Recombivax HB': [
+      { lot: 'LOT-2025-0912', expiry: '2026-11-30', site: 'Meridian Clinic - Riverside', status: 'Hold' }
+    ],
+    'Fluarix Quadrivalent': [
+      { lot: 'LOT-2026-0102', expiry: '2027-01-31', site: 'Meridian Clinic - Riverside', status: 'Ready' },
+      { lot: 'LOT-2026-0103', expiry: '2027-01-31', site: 'Meridian Mobile Unit - Fairhaven', status: 'Ready' },
+      { lot: 'LOT-2025-0876', expiry: '2026-10-15', site: 'Meridian Clinic - Lakeview', status: 'Used Up' }
+    ],
+    'Flulaval Quadrivalent': [
+      { lot: 'LOT-2026-0055', expiry: '2027-03-01', site: 'Meridian Clinic - Brookstone', status: 'Ready' }
+    ],
+    'Adacel': [
+      { lot: 'LOT-2026-0201', expiry: '2028-06-30', site: 'Meridian Clinic - Lakeview', status: 'Ready' }
+    ],
+    'Boostrix': [
+      { lot: 'LOT-2025-0733', expiry: '2026-12-01', site: 'Meridian Clinic - Riverside', status: 'Hold' }
+    ],
+    'M-M-R II': [
+      { lot: 'LOT-2026-0311', expiry: '2027-08-31', site: 'Meridian Clinic - Brookstone', status: 'Ready' }
+    ],
+    'Priorix': [
+      { lot: 'LOT-2026-0322', expiry: '2027-09-30', site: 'Meridian Clinic - Riverside', status: 'Ready' }
+    ],
+    'Typhim Vi': [
+      { lot: 'LOT-2026-0410', expiry: '2028-01-15', site: 'Meridian Mobile Unit - Fairhaven', status: 'Ready' }
+    ],
+    'Comirnaty': [
+      { lot: 'LOT-2026-0501', expiry: '2027-04-30', site: 'Meridian Clinic - Riverside', status: 'Ready' },
+      { lot: 'LOT-2026-0502', expiry: '2027-04-30', site: 'Meridian Clinic - Lakeview', status: 'Ready' },
+      { lot: 'LOT-2025-0488', expiry: '2026-11-01', site: 'Meridian Clinic - Riverside', status: 'Used Up' }
+    ],
+    'Spikevax': [
+      { lot: 'LOT-2026-0611', expiry: '2027-06-30', site: 'Meridian Clinic - Brookstone', status: 'Hold' }
+    ]
+  };
+
+  var efSelectedLot = null; // { brand, index }
+
+  function efRenderLotPicker() {
+    var brand = document.getElementById('vaccineBrand').value;
+    var hint = document.getElementById('lotPickerHint');
+    var grid = document.getElementById('lotPickerGrid');
+    grid.innerHTML = '';
+    efSelectedLot = null;
+    document.getElementById('lotNumber').value = '';
+    document.getElementById('expiryDate').value = '';
+
+    if (!brand) {
+      hint.style.display = 'block';
+      hint.textContent = 'Select a Vaccine Type and Brand above to see available lots.';
+      return;
+    }
+    var lots = DEMO_LOTS[brand] || [];
+    if (!lots.length) {
+      hint.style.display = 'block';
+      hint.textContent = 'No lots on file for ' + brand + ' in this demo dataset.';
+      return;
+    }
+    hint.style.display = 'none';
+    var mySite = document.getElementById('location').value;
+    // Ready lots first, own-site lots before other-site lots, Used Up last —
+    // same priority order the real picker sorts by.
+    var ordered = lots.map(function (l, i) { return { lot: l, i: i }; }).sort(function (a, b) {
+      var rank = function (l) { return l.status === 'Used Up' ? 2 : (l.site === mySite ? 0 : 1); };
+      return rank(a.lot) - rank(b.lot);
+    });
+    ordered.forEach(function (entry) {
+      var l = entry.lot;
+      var statusClass = l.status === 'Ready' ? 'ready' : (l.status === 'Hold' ? 'hold' : 'usedup');
+      var card = document.createElement('div');
+      card.className = 'vx-lot-card ' + statusClass;
+      card.dataset.index = entry.i;
+      var badges = '<span class="vx-lot-badge ' + statusClass + '">' + l.status + '</span>';
+      if (l.status !== 'Used Up') {
+        badges += l.site === mySite
+          ? '<span class="vx-lot-badge site">Your site</span>'
+          : '<span class="vx-lot-badge site" style="background:#e2e8f0;color:#4a5568;">' + l.site.replace('Meridian ', '') + '</span>';
+      }
+      card.innerHTML = '<div class="vx-lot-num">' + l.lot + '</div>' +
+        '<div class="vx-lot-exp">Exp ' + l.expiry + '</div>' +
+        '<div class="vx-lot-badges">' + badges + '</div>';
+      if (l.status !== 'Used Up') {
+        card.onclick = function () { efSelectLot(brand, entry.i); };
+      }
+      grid.appendChild(card);
+    });
+  }
+
+  function efSelectLot(brand, index) {
+    var lot = (DEMO_LOTS[brand] || [])[index];
+    if (!lot || lot.status === 'Used Up') return;
+    efSelectedLot = { brand: brand, index: index };
+    document.getElementById('lotNumber').value = lot.lot;
+    document.getElementById('expiryDate').value = lot.expiry;
+    var grid = document.getElementById('lotPickerGrid');
+    Array.prototype.forEach.call(grid.children, function (card) {
+      card.classList.toggle('selected', Number(card.dataset.index) === index);
+    });
+  }
+
   var efGen = 0;
   var efSelectedRecipient = null;
 
@@ -791,6 +930,7 @@
   function efSiteChanged() {
     document.getElementById('locationEcho').value = document.getElementById('location').value;
     efRenderRecipientOptions();
+    efRenderLotPicker();
   }
 
   function efRenderRecipientOptions() {
@@ -810,7 +950,7 @@
     filtered.forEach(function (r) {
       var opt = document.createElement('option');
       opt.value = r.id;
-      opt.text = r.name + ' (' + r.site.replace('Meridian ', '') + ')';
+      opt.text = r.name;
       select.appendChild(opt);
     });
     if (previousValue && filtered.some(function (r) { return r.id === previousValue; })) {
@@ -980,6 +1120,7 @@
     document.getElementById('schedule').innerHTML = '<option value="">-- Select Brand First --</option>';
     document.getElementById('intendedDose').innerHTML = '<option value="">-- Select Vaccine First --</option>';
     efUpdateFollowUp();
+    efRenderLotPicker();
   }
 
   function efBrandChanged() {
@@ -994,6 +1135,7 @@
       scheduleSelect.appendChild(opt);
     });
     scheduleSelect.onchange = efScheduleChanged;
+    efRenderLotPicker();
   }
 
   function efScheduleChanged() {
@@ -1059,10 +1201,22 @@
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner">&#9696;</span> Saving…';
     efShowMessage('Saving record…', 'saving');
+    var disposition = document.getElementById('doseDisposition').value;
+    var claimedLot = efSelectedLot;
     setTimeout(function () {
       btn.disabled = false;
       btn.innerHTML = '&#128190; Save Record';
-      efShowMessage('✓ Record saved (demo only — nothing was actually written anywhere).', 'success');
+      var note = '';
+      if (claimedLot) {
+        var lotRecord = DEMO_LOTS[claimedLot.brand][claimedLot.index];
+        // Mirrors the real app: an Administered dose claims the lot and
+        // flips it to Used Up (removed from future pickers); anything else
+        // flags it Hold instead, staying visible but tagged.
+        lotRecord.status = disposition === 'Administered' ? 'Used Up' : 'Hold';
+        note = ' Lot ' + lotRecord.lot + ' is now marked ' + lotRecord.status + '.';
+        efRenderLotPicker();
+      }
+      efShowMessage('✓ Record saved (demo only — nothing was actually written anywhere).' + note, 'success');
     }, 900);
   }
 
@@ -1322,8 +1476,12 @@
       a: 'This means two different recipients in the system share the exact same name, and the sheet resolved your entry to the wrong one. The record was NOT saved. Please contact your administrator or IT Support so the duplicate can be reviewed before you try again.'
     },
     {
-      q: 'The Lot Number field is blocking my save.',
-      a: 'Lot Number is checked against the selected Brand and Expiry Date for consistency. If you\'re sure the lot number is correct as typed, double-check the Brand and Expiry Date fields match what\'s actually on the vial — a mismatch there is the most common cause.'
+      q: 'Why is Lot Number a set of cards instead of a text box now?',
+      a: 'Once you pick a Vaccine Type and Brand, the real system shows every lot currently on hand for that brand as a card — Lot Number and Expiry Date are pre-filled by clicking one, not typed by hand. Green = Ready to use, amber = on Hold, and a lot marked Used Up is greyed out and can\'t be selected. A blue "Your site" badge means that lot is stocked right where you are; otherwise it shows which site has it. (This demo shows a small illustrative set of lots, not the real system\'s full live inventory.)'
+    },
+    {
+      q: 'A lot I picked disappeared after I saved the record.',
+      a: 'Saving an Administered dose against a lot claims it and flips it to Used Up, so it drops out of the picker for the next entry — that\'s expected, not an error. Saving any other disposition (Deferred, Declined, No-show, Contraindicated) instead flags that lot Hold: it stays visible and selectable, just tagged, since the vial wasn\'t actually used.'
     },
     {
       q: 'I see a warning that a vaccine should be given SC, not IM (or vice versa).',
