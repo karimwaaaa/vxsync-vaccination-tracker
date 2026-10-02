@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --vxr-navy: #1b3a5c;
+      --vxr-green: #219653;
+      --vxr-muted: #7f8c8d;
+      --vxr-border: #dbe1ea;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 0;
+      padding: 16px 18px 20px;
+      color: #2c3e50;
+      font-size: 14px;
+    }
+    h1 { font-size: 1.15em; color: var(--vxr-navy); margin: 0 0 6px; }
+    p.note {
+      font-size: 0.85em; color: var(--vxr-muted); margin: 0 0 14px; line-height: 1.4;
+    }
+    p.scan-help {
+      font-size: 0.82em; color: #34495e; line-height: 1.4; margin: 0 0 10px;
+      background: #f6f8fb; border: 1px solid var(--vxr-border); border-radius: 6px; padding: 8px 10px;
+    }
+    .msg {
+      display: none; padding: 8px 12px; border-radius: 6px; font-size: 0.88em; margin-bottom: 12px;
+      background: #eef6ff; color: #1b3a5c;
+    }
+    .msg.error { background: #fadbd8; color: #922b21; }
+    .section {
+      border: 1px solid var(--vxr-border); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px;
+    }
+    .section h2 { font-size: 0.95em; margin: 0 0 10px; color: var(--vxr-navy); }
+    .site-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .site-row label { font-size: 0.82em; font-weight: 600; color: #34495e; }
+    .site-row input { flex: 1; min-width: 160px; padding: 7px 10px; border: 1px solid var(--vxr-border); border-radius: 6px; font-size: 0.9em; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 12px; margin-bottom: 12px; }
+    .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .field label { font-size: 0.78em; font-weight: 600; color: #34495e; }
+    .field input { padding: 7px 9px; border: 1px solid var(--vxr-border); border-radius: 6px; font-size: 0.88em; width: 100%; }
+    .scan-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .scan-status { font-size: 0.82em; color: var(--vxr-muted); }
+    .scan-status.ok { color: var(--vxr-green); font-weight: 600; }
+    .scan-status.fail { color: #935e38; font-weight: 600; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      font-size: 0.86em; padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600;
+    }
+    .btn-primary { background: var(--vxr-navy); color: #fff; }
+    .btn-add { background: var(--vxr-green); color: #fff; }
+    .btn-plain { background: #eef1f6; color: #34495e; }
+    button:disabled { opacity: 0.6; cursor: default; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84em; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eef1f6; }
+    th { color: var(--vxr-navy); background: #f6f8fb; }
+    .empty-row td { color: var(--vxr-muted); font-style: italic; }
+    .remove-btn { background: none; border: none; color: #922b21; font-weight: 700; cursor: pointer; padding: 0; font-size: 0.95em; }
+    .remove-btn:hover { text-decoration: underline; }
+    .batch-wrap { max-height: 220px; overflow-y: auto; border: 1px solid var(--vxr-border); border-radius: 6px; }
+    .close-row { text-align: right; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>📷 Receive Inventory</h1>
+  <p class="note">
+    Logs newly-received physical vaccine units into Lot_Expiry_Master — one row per unit, same convention live
+    lot tracking already relies on. Scanning a box's barcode only ever <strong>prefills</strong> Lot Number and
+    Expiry Date for you to check; it never writes anything by itself, and nothing here saves until you click
+    Submit Batch below.
+  </p>
+  <div id="msg" class="msg"></div>
+
+  <div class="section">
+    <div class="site-row">
+      <label for="site">Site of Vaccination</label>
+      <input list="siteOptions" id="site" placeholder="e.g. MTC White Plains - QC">
+      <datalist id="siteOptions"></datalist>
+    </div>
+
+    <p class="scan-help">
+      Try <strong>📷 Scan Box</strong> first — it reads the printed barcode directly and is the most reliable.
+      If the barcode won't scan (damaged box, smudged label, no barcode printed), try
+      <strong>🖼️ Scan from Photo</strong> instead — it reads the label's printed text using AI. If neither
+      works, just type the fields in below by hand — that's always fine too.
+    </p>
+
+    <div class="scan-row">
+      <button type="button" class="btn-plain" onclick="document.getElementById('scanInput').click()">📷 Scan Box (Photo)</button>
+      <input type="file" id="scanInput" accept="image/*" capture="environment" style="display:none;" onchange="handleScan(event)">
+      <span id="scanStatus" class="scan-status"></span>
+    </div>
+
+    <!-- FALLBACK PATH — only for when the barcode above won't scan (damaged
+         box, smudged label, a format ZXing can't read, or stock with no
+         barcode at all). Deliberately a SEPARATE button, not a fallback
+         triggered automatically after a failed barcode scan: the person
+         should always be the one deciding to spend an AI call, not have
+         one fired on their behalf every time a barcode read comes back
+         empty. Same "prefill only, never auto-add" rule as the barcode
+         path — see handleAiScan below. -->
+    <div class="scan-row">
+      <button type="button" class="btn-plain" onclick="document.getElementById('aiScanInput').click()">🖼️ Scan from Photo (AI fallback)</button>
+      <input type="file" id="aiScanInput" accept="image/*" capture="environment" style="display:none;" onchange="handleAiScan(event)">
+      <span id="aiScanStatus" class="scan-status"></span>
+    </div>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="vaccineType">Vaccine Type</label>
+        <input list="typeOptions" id="vaccineType" onchange="loadBrands()">
+        <datalist id="typeOptions"></datalist>
+      </div>
+      <div class="field">
+        <label for="brand">Vaccine Brand</label>
+        <input list="brandOptions" id="brand">
+        <datalist id="brandOptions"></datalist>
+      </div>
+      <div class="field">
+        <label for="lot">Lot Number</label>
+        <input type="text" id="lot" placeholder="Scan or type">
+      </div>
+      <div class="field">
+        <label for="expiry">Expiry Date</label>
+        <input type="date" id="expiry">
+      </div>
+      <div class="field">
+        <label for="qty">Quantity</label>
+        <input type="number" id="qty" value="1" min="1" step="1">
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="btn-add" onclick="addToBatch()">+ Add to Batch</button>
+      <button type="button" class="btn-plain" onclick="clearForm()">Clear Fields</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Batch to Submit</h2>
+    <div class="batch-wrap">
+      <table>
+        <thead>
+          <tr><th>Site</th><th>Type</th><th>Brand</th><th>Lot</th><th>Expiry</th><th>Qty</th><th></th></tr>
+        </thead>
+        <tbody id="batchTable"><tr class="empty-row"><td colspan="7">No lots added yet.</td></tr></tbody>
+      </table>
+    </div>
+    <div class="actions" style="margin-top:10px;">
+      <button type="button" class="btn-primary" id="submitBtn" onclick="submitBatch()">✅ Submit Batch</button>
+      <button type="button" class="btn-plain" onclick="clearBatch()">Clear Batch</button>
+    </div>
+  </div>
+
+  <div class="close-row">
+    <button type="button" class="btn-plain" onclick="google.script.host.close()">Close</button>
+  </div>
+
+  <!-- ZXing — decodes a barcode/QR/GS1 DataMatrix from a still photo,
+       client-side. Same library and same "prefill only, never auto-add"
+       design as the Dashboard.html Receive tab — see that file's script
+       block for the fuller reasoning on why a still photo is used here
+       instead of a live camera feed (this dialog is itself inside an
+       Apps Script HtmlService iframe, same sandboxing concern). -->
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+
+  <script>
+    var batch = [];
+    var brandCache = {};
+
+    (function init() {
+      google.script.run
+        .withSuccessHandler(function (opts) {
+          var siteList = document.getElementById('siteOptions');
+          siteList.innerHTML = '';
+          ((opts && opts.sites) || []).forEach(function (s) {
+            var o = document.createElement('option'); o.value = s; siteList.appendChild(o);
+          });
+          var typeList = document.getElementById('typeOptions');
+          typeList.innerHTML = '';
+          ((opts && opts.vaccineTypes) || []).forEach(function (t) {
+            var o = document.createElement('option'); o.value = t; typeList.appendChild(o);
+          });
+        })
+        .withFailureHandler(function (err) {
+          showMsg('Could not load Vaccine Type / Site options: ' + (err && err.message ? err.message : 'Unknown error.'), true);
+        })
+        .vxReceiveGetFormOptions();
+    })();
+
+    function showMsg(text, isError) {
+      var el = document.getElementById('msg');
+      if (!text) { el.style.display = 'none'; return; }
+      el.textContent = text;
+      el.className = 'msg' + (isError ? ' error' : '');
+      el.style.display = 'block';
+    }
+
+    function loadBrands() {
+      var type = document.getElementById('vaccineType').value.trim();
+      var brandList = document.getElementById('brandOptions');
+      if (!type) { brandList.innerHTML = ''; return; }
+      if (brandCache[type]) { renderBrands(brandCache[type]); return; }
+      google.script.run
+        .withSuccessHandler(function (brands) {
+          brandCache[type] = brands || [];
+          renderBrands(brandCache[type]);
+        })
+        .withFailureHandler(function (err) {
+          showMsg('Could not load brands for "' + type + '": ' + (err && err.message ? err.message : 'Unknown error.'), true);
+        })
+        .vxReceiveGetBrands(type);
+    }
+
+    function renderBrands(brands) {
+      var brandList = document.getElementById('brandOptions');
+      brandList.innerHTML = '';
+      brands.forEach(function (b) {
+        var o = document.createElement('option'); o.value = b; brandList.appendChild(o);
+      });
+    }
+
+    // --- Barcode scan (still photo, not live video — see the <script src>
+    // comment above for why) ---------------------------------------------
+    function handleScan(event) {
+      var file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+
+      var statusEl = document.getElementById('scanStatus');
+      statusEl.className = 'scan-status';
+      statusEl.textContent = 'Reading barcode…';
+
+      if (typeof ZXing === 'undefined') {
+        statusEl.className = 'scan-status fail';
+        statusEl.textContent = '⚠️ Barcode reader failed to load (network may be blocking cdn.jsdelivr.net) — enter Lot Number / Expiry manually.';
+        return;
+      }
+
+      var url = URL.createObjectURL(file);
+      var reader = new ZXing.BrowserMultiFormatReader();
+      reader.decodeFromImageUrl(url)
+        .then(function (result) {
+          URL.revokeObjectURL(url);
+          var text = result && result.getText ? result.getText() : '';
+          var parsed = parseGS1(text);
+          if (parsed && (parsed.lot || parsed.expiry)) {
+            if (parsed.lot) document.getElementById('lot').value = parsed.lot;
+            if (parsed.expiry) document.getElementById('expiry').value = parsed.expiry;
+            statusEl.className = 'scan-status ok';
+            statusEl.textContent = '✅ Scanned — please double-check the prefilled fields before adding to the batch.';
+          } else {
+            statusEl.className = 'scan-status fail';
+            statusEl.textContent = text
+              ? '⚠️ Barcode read (' + text + ') but wasn\'t in the expected format — enter Lot Number / Expiry manually.'
+              : '⚠️ Decoded, but found nothing usable — enter Lot Number / Expiry manually.';
+          }
+        })
+        .catch(function () {
+          URL.revokeObjectURL(url);
+          statusEl.className = 'scan-status fail';
+          statusEl.textContent = '⚠️ No barcode detected in that photo. Try a closer, better-lit shot, or enter Lot Number / Expiry manually.';
+        });
+    }
+
+    // Same GS1 Application Identifier parser as Dashboard.html's Receive
+    // tab (vxParseGS1_) — kept in sync manually, same as every other
+    // duplicated piece of logic between this bound project and the
+    // standalone web app. See that copy's comment for the AI reference.
+    function parseGS1(raw) {
+      if (!raw) return null;
+      var GS = '\u001D';
+      var s = String(raw).replace(/^\]\w\d/, '');
+      var result = {};
+      var i = 0;
+      var guard = 0;
+      while (i < s.length && guard < 10000) {
+        guard++;
+        var ai2 = s.substr(i, 2);
+        if (ai2 === '01' && /^\d{14}/.test(s.substr(i + 2))) {
+          result.gtin = s.substr(i + 2, 14);
+          i += 16;
+        } else if (ai2 === '17' && /^\d{6}/.test(s.substr(i + 2))) {
+          var yymmdd = s.substr(i + 2, 6);
+          result.expiry = '20' + yymmdd.substr(0, 2) + '-' + yymmdd.substr(2, 2) + '-' + yymmdd.substr(4, 2);
+          i += 8;
+        } else if (ai2 === '10') {
+          var restLot = s.substr(i + 2);
+          var gsIdxLot = restLot.indexOf(GS);
+          var lot = gsIdxLot === -1 ? restLot : restLot.substr(0, gsIdxLot);
+          result.lot = lot;
+          i += 2 + lot.length + (gsIdxLot === -1 ? 0 : 1);
+        } else if (ai2 === '21') {
+          var restSerial = s.substr(i + 2);
+          var gsIdxSerial = restSerial.indexOf(GS);
+          var serialLen = gsIdxSerial === -1 ? restSerial.length : gsIdxSerial;
+          i += 2 + serialLen + (gsIdxSerial === -1 ? 0 : 1);
+        } else {
+          i++;
+        }
+      }
+      return (result.lot || result.expiry) ? result : null;
+    }
+
+    // --- AI photo fallback (Gemini) --------------------------------------
+    // Only reached when the person explicitly taps this second button —
+    // never triggered automatically after a failed barcode scan. Resizes
+    // the photo client-side before sending (a full-resolution phone photo
+    // is overkill for reading a label and just makes the round-trip
+    // slower), then hands the base64 data to the server, which is the
+    // ONLY place the Gemini API key is ever used — see
+    // vxReceiveExtractFromPhotoAI in VxSync_Receive_Inventory.gs for the
+    // actual API call and why it can't live here in client JS.
+    var AI_SCAN_MAX_DIMENSION = 1280; // long edge, in pixels — plenty to read printed label text, keeps the request small/fast
+    var AI_SCAN_JPEG_QUALITY = 0.82;
+
+    function handleAiScan(event) {
+      var file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+
+      var statusEl = document.getElementById('aiScanStatus');
+      statusEl.className = 'scan-status';
+      statusEl.textContent = 'Resizing photo…';
+
+      resizeImageToBase64_(file, AI_SCAN_MAX_DIMENSION, AI_SCAN_JPEG_QUALITY)
+        .then(function (base64Jpeg) {
+          statusEl.textContent = 'Asking AI to read the label… (this can take a few seconds)';
+          google.script.run
+            .withSuccessHandler(function (result) {
+              handleAiScanResult_(result, statusEl);
+            })
+            .withFailureHandler(function (err) {
+              statusEl.className = 'scan-status fail';
+              statusEl.textContent = '⚠️ AI extraction failed: ' + (err && err.message ? err.message : 'Unknown error.') + ' — enter manually.';
+            })
+            .vxReceiveExtractFromPhotoAI(base64Jpeg, 'image/jpeg');
+        })
+        .catch(function (err) {
+          statusEl.className = 'scan-status fail';
+          statusEl.textContent = '⚠️ Could not read that photo file (' + (err && err.message ? err.message : 'unknown error') + ') — try again or enter manually.';
+        });
+    }
+
+    function handleAiScanResult_(result, statusEl) {
+      if (!result || !result.ok) {
+        statusEl.className = 'scan-status fail';
+        if (result && result.rateLimited) {
+          statusEl.textContent = '⚠️ AI photo extraction hit its usage limit for now — try again in a bit, or use the barcode scan / manual entry.';
+        } else {
+          statusEl.textContent = '⚠️ AI extraction failed: ' + ((result && result.message) || 'Unknown error.') + ' — enter manually.';
+        }
+        return;
+      }
+
+      var fields = result.fields || {};
+      var filledAny = false;
+      if (fields.lotNumber) { document.getElementById('lot').value = fields.lotNumber; filledAny = true; }
+      if (fields.expiryDate) { document.getElementById('expiry').value = fields.expiryDate; filledAny = true; }
+      if (fields.brand) { document.getElementById('brand').value = fields.brand; filledAny = true; }
+      if (fields.vaccineType) { document.getElementById('vaccineType').value = fields.vaccineType; loadBrands(); filledAny = true; }
+
+      statusEl.className = 'scan-status ok';
+      if (filledAny) {
+        statusEl.textContent = '🤖 AI-extracted — please verify every field below (especially any left blank) before adding to the batch.';
+      } else {
+        statusEl.textContent = '🤖 AI could not confidently read any field from that photo — enter manually.';
+      }
+    }
+
+    // Draws the photo onto an off-screen canvas at a capped size and
+    // returns a Promise of its base64 JPEG data (no data: URL prefix —
+    // the server expects raw base64). Never touches google.script.run or
+    // any server state; this is purely a client-side resize step.
+    function resizeImageToBase64_(file, maxDimension, quality) {
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        var url = URL.createObjectURL(file);
+        img.onload = function () {
+          URL.revokeObjectURL(url);
+          var w = img.naturalWidth, h = img.naturalHeight;
+          var scale = Math.min(1, maxDimension / Math.max(w, h));
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(w * scale);
+          canvas.height = Math.round(h * scale);
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          var dataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(dataUrl.split(',')[1]); // strip the "data:image/jpeg;base64," prefix
+        };
+        img.onerror = function () {
+          URL.revokeObjectURL(url);
+          reject(new Error('Image failed to load'));
+        };
+        img.src = url;
+      });
+    }
+
+    // --- Batch staging ---------------------------------------------------
+    function addToBatch() {
+      var site = document.getElementById('site').value.trim();
+      var vaccineType = document.getElementById('vaccineType').value.trim();
+      var vaccineBrand = document.getElementById('brand').value.trim();
+      var lotNumber = document.getElementById('lot').value.trim();
+      var expiryDate = document.getElementById('expiry').value;
+      var quantity = parseInt(document.getElementById('qty').value, 10);
+
+      if (!site) return showMsg('Site of Vaccination is required.', true);
+      if (!vaccineType) return showMsg('Vaccine Type is required.', true);
+      if (!vaccineBrand) return showMsg('Vaccine Brand is required.', true);
+      if (!lotNumber) return showMsg('Lot Number is required.', true);
+      if (!expiryDate) return showMsg('Expiry Date is required.', true);
+      if (!Number.isFinite(quantity) || quantity < 1) return showMsg('Quantity must be a whole number of at least 1.', true);
+
+      showMsg('');
+      batch.push({ site: site, vaccineType: vaccineType, vaccineBrand: vaccineBrand, lotNumber: lotNumber, expiryDate: expiryDate, quantity: quantity });
+      renderBatch();
+      clearForm();
+    }
+
+    function renderBatch() {
+      var tbody = document.getElementById('batchTable');
+      if (batch.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No lots added yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = batch.map(function (r, idx) {
+        return '<tr>' +
+          '<td>' + escapeHtml(r.site) + '</td>' +
+          '<td>' + escapeHtml(r.vaccineType) + '</td>' +
+          '<td>' + escapeHtml(r.vaccineBrand) + '</td>' +
+          '<td>' + escapeHtml(r.lotNumber) + '</td>' +
+          '<td>' + escapeHtml(r.expiryDate) + '</td>' +
+          '<td>' + r.quantity + '</td>' +
+          '<td><button type="button" class="remove-btn" onclick="removeFromBatch(' + idx + ')">✕</button></td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    function removeFromBatch(idx) {
+      batch.splice(idx, 1);
+      renderBatch();
+    }
+
+    function clearForm() {
+      document.getElementById('vaccineType').value = '';
+      document.getElementById('brand').value = '';
+      document.getElementById('lot').value = '';
+      document.getElementById('expiry').value = '';
+      document.getElementById('qty').value = '1';
+      document.getElementById('scanStatus').textContent = '';
+      document.getElementById('scanStatus').className = 'scan-status';
+      document.getElementById('aiScanStatus').textContent = '';
+      document.getElementById('aiScanStatus').className = 'scan-status';
+    }
+
+    function clearBatch() {
+      batch = [];
+      renderBatch();
+      showMsg('');
+    }
+
+    function submitBatch() {
+      if (batch.length === 0) return showMsg('Add at least one lot to the batch first.', true);
+      var btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting…';
+      showMsg('');
+
+      google.script.run
+        .withSuccessHandler(function (result) {
+          btn.disabled = false;
+          btn.textContent = '✅ Submit Batch';
+          var count = (result && result.rowsAdded) || 0;
+          showMsg('✅ Added ' + count + ' unit' + (count === 1 ? '' : 's') + ' to Lot_Expiry_Master. You can keep adding more, or close this window.', false);
+          batch = [];
+          renderBatch();
+        })
+        .withFailureHandler(function (err) {
+          btn.disabled = false;
+          btn.textContent = '✅ Submit Batch';
+          showMsg('Could not submit batch: ' + (err && err.message ? err.message : 'Unknown error.'), true);
+        })
+        .vxReceiveSubmitBatch(batch);
+    }
+
+    function escapeHtml(text) {
+      var div = document.createElement('div');
+      div.textContent = text == null ? '' : String(text);
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
