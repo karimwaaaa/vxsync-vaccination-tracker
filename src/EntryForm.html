@@ -22,12 +22,33 @@
      downstream — validation, submit payload, efApplySelectedLot —
      had to change.
      ============================================================ */
-  #entryPanel .ef-lot-card-list { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
+  /* Two cards per row, in a fixed-height scrollable container — per
+     client request, so a big inventory batch (dozens of lots) doesn't
+     just keep pushing the rest of the form down the page forever. Falls
+     back to one column on narrow/mobile widths where two would be too
+     cramped to read. */
+  #entryPanel .ef-lot-card-list {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+    margin: 4px 0 12px; max-height: 420px; overflow-y: auto;
+    padding: 8px; border: 1px solid var(--vx-border); border-radius: 8px; background: #fafcfd;
+  }
+  /* Filters the already-loaded card list client-side (efLotsById is
+     already on hand after a fetch — no round trip needed to search it).
+     Shown/hidden in lockstep with #lotCardList itself. */
+  #entryPanel .ef-lot-search {
+    width: 100%; box-sizing: border-box; padding: 8px 12px; margin: 4px 0 6px;
+    border: 1px solid #dbe1ea; border-radius: 6px; font-size: 14px;
+  }
+  #entryPanel .ef-lot-search:focus { border-color: var(--vx-teal); outline: none; }
+  @media (max-width: 560px) {
+    #entryPanel .ef-lot-card-list { grid-template-columns: 1fr; }
+  }
+  #entryPanel .ef-lot-empty { grid-column: 1 / -1; }
   #entryPanel .ef-lot-card {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding: 10px 14px; border: 2px solid var(--vx-border); border-radius: 8px;
     background: #fff; cursor: pointer; text-align: left; font-family: inherit;
-    transition: 0.12s; width: 100%; box-sizing: border-box;
+    transition: 0.12s; width: 100%; box-sizing: border-box; min-width: 0;
   }
   #entryPanel .ef-lot-card:hover { border-color: var(--vx-teal); background: #f5fcfb; }
   #entryPanel .ef-lot-card.ef-lot-selected {
@@ -643,6 +664,7 @@
         <select id="lotNumberSelect" style="display:none;"><option value="">-- Select Lot --</option></select>
         <input type="text" id="lotNumber" placeholder="Type lot number">
       </div>
+      <input type="text" id="lotSearchBox" class="ef-lot-search" placeholder="🔍 Search lot number…" style="display:none;" autocomplete="off">
       <div id="lotCardList" class="ef-lot-card-list" style="display:none;"></div>
       <div id="lotInventoryHint" class="ef-helper-tooltip" style="display:none;"></div>
       <div class="form-row"><label for="expiryDate">Expiry Date</label><input type="date" id="expiryDate"></div>
@@ -764,15 +786,9 @@
         <input type="text" id="arCompany" autocomplete="off">
       </div>
     </div>
-    <div class="ar-two-col">
-      <div class="ar-row">
-        <label for="arDept">Department / Unit</label>
-        <input type="text" id="arDept" autocomplete="off">
-      </div>
-      <div class="ar-row">
-        <label for="arDeptId">Department / Unit ID</label>
-        <input type="text" id="arDeptId" autocomplete="off">
-      </div>
+    <div class="ar-row">
+      <label for="arDept">Department / Unit</label>
+      <input type="text" id="arDept" autocomplete="off">
     </div>
     <div class="ar-row">
       <label for="arAssignedSite">Assigned Site/Location</label>
@@ -1224,7 +1240,7 @@
   // ============================================================
   var arModalFieldIds = [
     'arEmployeeId', 'arLastName', 'arFirstName', 'arMiddleName', 'arDob', 'arSex',
-    'arCategory', 'arCompany', 'arDept', 'arDeptId', 'arAssignedSite', 'arEmail', 'arMobile',
+    'arCategory', 'arCompany', 'arDept', 'arAssignedSite', 'arEmail', 'arMobile',
     'arEnrollmentSource', 'arRemarks'
   ];
   var arPendingDuplicateFields = null; // set while a duplicate warning is showing and awaiting confirmation
@@ -1286,7 +1302,6 @@
       category: document.getElementById('arCategory').value.trim(),
       company: document.getElementById('arCompany').value.trim(),
       dept: document.getElementById('arDept').value.trim(),
-      deptId: document.getElementById('arDeptId').value.trim(),
       assignedSite: document.getElementById('arAssignedSite').value.trim(),
       email: document.getElementById('arEmail').value.trim(),
       mobile: document.getElementById('arMobile').value.trim(),
@@ -1496,8 +1511,12 @@
           }
           select.value = preselectBrand; // prefilled ONLY — select stays a normal, fully editable dropdown
           efLoadSchedulesPlain(type, preselectBrand, preselectSchedule, gen);
-        } else if (efInventoryActive && brands.length === 1) {
+        } else if (brands.length === 1) {
           // Single-option auto-fill, same principle as Vaccine Type above.
+          // No longer gated on efInventoryActive — per client request, a
+          // vaccine type with exactly one brand should prefill it whether
+          // or not this client even tracks live lot inventory; there's
+          // nothing to actually choose between either way.
           select.value = brands[0];
           efLoadSchedulesPlain(type, brands[0], null, gen);
         } else {
@@ -1551,6 +1570,15 @@
           // efApplyDoseHistory, so it's genuinely safe to consider this
           // lookup's "loading" phase done.
           efSetDoseLookupIndicator(false);
+        } else if (schedules.length === 1 && !efHasHistory) {
+          // Single-option auto-fill, same principle as Vaccine Type/Brand
+          // above. Skipped when efHasHistory is true — with real history,
+          // Intended Dose was already resolved+locked by efApplyDoseHistory
+          // and doesn't need (or want) a getStartingDoseInfo lookup on top
+          // of it; this branch only runs when there's genuinely no
+          // preselect at all, i.e. the "no history" case.
+          select.value = schedules[0];
+          efResolveStartingDose(type, brand, schedules[0], gen);
         } else {
           // No schedule to prefill — the encoder still has to pick one
           // manually before Intended Dose can be resolved. Stay locked
@@ -1564,6 +1592,46 @@
       })
       .withFailureHandler(function (err) { if (gen === efGen) { efSetDoseLookupIndicator(false); efShowMessage('ERROR loading schedules: ' + err.message, 'error'); } })
       .getSchedules(type, brand);
+  }
+
+  // Factored out of the 'schedule' change handler below so BOTH a manual
+  // schedule pick and the single-option auto-fill above (efLoadSchedulesPlain)
+  // resolve the starting dose the exact same way, instead of duplicating
+  // this lookup in two places that could drift apart.
+  function efResolveStartingDose(type, brand, schedule, gen) {
+    efSetDoseLookupIndicator(true, '🔄 Determining the starting dose for this schedule…');
+    efLockDoseField(); // locked WHILE looking up too — nothing to pick yet until this resolves
+    google.script.run
+      .withSuccessHandler(function (info) {
+        if (gen !== efGen) return; // superseded by a newer brand/schedule/type change
+        efSetDoseLookupIndicator(false);
+        efSetBrandScheduleIndicator(false);
+        if (info && info.label) {
+          // Routed through efPopulateDoseOptions (unlockAfter=false)
+          // rather than checking select.options/hasOption directly — same
+          // fix as efApplyDoseHistory above: guarantees the real option
+          // list is loaded before the value is set, instead of silently
+          // no-op'ing if #intendedDose's options haven't finished loading
+          // yet (the exact "locked but empty" bug class).
+          efPopulateDoseOptions(info.label, gen, false);
+          efShowHint('No prior "Administered" record found for this recipient/vaccine — pre-filled starting dose "' + efEsc(info.label) + '" per Vaccine_Schedule_Master — locked to prevent accidental changes. If the recipient was already vaccinated elsewhere, unlock/correct it manually.');
+          // Locked, same as the history-found path (efApplyDoseHistory)
+          // below — a confidently-derived starting dose shouldn't be any
+          // easier to accidentally overwrite than a history-derived one.
+          efLockDoseField();
+        } else {
+          efUnlockDoseField();
+        }
+        efUpdateFollowUpPreview();
+      })
+      .withFailureHandler(function () {
+        if (gen !== efGen) return;
+        efSetDoseLookupIndicator(false);
+        efSetBrandScheduleIndicator(false);
+        efUnlockDoseField();
+        efUpdateFollowUpPreview();
+      })
+      .getStartingDoseInfo(type, brand, schedule);
   }
 
   document.getElementById('vaccineBrand').addEventListener('change', function () {
@@ -1599,6 +1667,10 @@
     var cardList = document.getElementById('lotCardList');
     cardList.innerHTML = '';
     cardList.style.display = 'none';
+    var searchBox = document.getElementById('lotSearchBox');
+    searchBox.style.display = 'none';
+    searchBox.value = '';
+    efLotSearchTerm = '';
     document.getElementById('lotNumber').style.display = '';
     document.getElementById('lotNumber').readOnly = false;
     document.getElementById('lotNumber').value = '';
@@ -1616,6 +1688,7 @@
   }
 
   var efLotsById = {}; // last-loaded lots, keyed by lot number, so a card click can re-run efApplySelectedLot with full data
+  var efLotSearchTerm = ''; // current #lotSearchBox text, lowercased — filters efRenderLotCards client-side, no extra round trip
 
   // Single place that "picks" a lot, called from both a card click and the
   // hidden <select>'s own change handler (kept as the real source of truth
@@ -1642,9 +1715,23 @@
   function efRenderLotCards() {
     var cardList = document.getElementById('lotCardList');
     var selected = document.getElementById('lotNumberSelect').value;
-    var lots = Object.keys(efLotsById).map(function (k) { return efLotsById[k]; });
-    if (lots.length === 0) {
+    var allLots = Object.keys(efLotsById).map(function (k) { return efLotsById[k]; });
+    if (allLots.length === 0) {
+      document.getElementById('lotSearchBox').style.display = 'none';
       cardList.innerHTML = '<div class="ef-lot-empty">No available Lot Numbers logged for this Vaccine Type/Brand at this site. Please contact logistics.</div>';
+      return;
+    }
+    // Search box is only useful once there's something to search through —
+    // keep it hidden for a single-lot/empty result so it doesn't clutter a
+    // case where there's nothing to filter anyway.
+    var searchBox = document.getElementById('lotSearchBox');
+    searchBox.style.display = allLots.length > 1 ? '' : 'none';
+    var term = efLotSearchTerm;
+    var lots = !term ? allLots : allLots.filter(function (l) {
+      return l.lot.toLowerCase().indexOf(term) !== -1;
+    });
+    if (lots.length === 0) {
+      cardList.innerHTML = '<div class="ef-lot-empty">No Lot Number matches "' + efLotEsc(efLotSearchTerm) + '". Clear the search to see all available lots.</div>';
       return;
     }
     cardList.innerHTML = lots.map(function (l) {
@@ -1691,6 +1778,11 @@
         var select = document.getElementById('lotNumberSelect');
         var cardList = document.getElementById('lotCardList');
         select.innerHTML = '<option value="">-- Select Lot --</option>';
+        // A fresh Type/Brand fetch means a brand-new list — any search term
+        // left over from a previous selection would otherwise silently
+        // filter out lots the encoder hasn't even seen yet.
+        document.getElementById('lotSearchBox').value = '';
+        efLotSearchTerm = '';
         efLotsById = {};
         lots.forEach(function (l) {
           efLotsById[l.lot] = l;
@@ -1746,6 +1838,14 @@
     document.getElementById('expiryDate').value = lot ? (expiry || '') : '';
   });
 
+  // Filters the card list only — never touches efLotsById or the hidden
+  // <select>, so typing a search term can't accidentally change, clear, or
+  // re-fetch the actual selected lot.
+  document.getElementById('lotSearchBox').addEventListener('input', function () {
+    efLotSearchTerm = this.value.trim().toLowerCase();
+    efRenderLotCards();
+  });
+
   function efSetBrandScheduleIndicator(active) {
     var el = document.getElementById('brandScheduleLookupIndicator');
     el.classList.toggle('show', !!active);
@@ -1761,35 +1861,7 @@
     var schedule = this.value;
     var gen = ++efGen; // new schedule choice — invalidate any in-flight starting-dose lookup tied to the previous one
     if (!type || !brand || !schedule || efHasHistory) { efUpdateFollowUpPreview(); return; }
-    efSetDoseLookupIndicator(true, '🔄 Determining the starting dose for this schedule…');
-    efLockDoseField(); // locked WHILE looking up too — nothing to pick yet until this resolves
-    google.script.run
-      .withSuccessHandler(function (info) {
-        if (gen !== efGen) return; // superseded by a newer brand/schedule/type change
-        efSetDoseLookupIndicator(false);
-        efSetBrandScheduleIndicator(false);
-        if (info && info.label) {
-          var select = document.getElementById('intendedDose');
-          var hasOption = Array.prototype.some.call(select.options, function (o) { return o.value === info.label; });
-          if (hasOption) select.value = info.label;
-          efShowHint('No prior "Administered" record found for this recipient/vaccine — pre-filled starting dose "' + efEsc(info.label) + '" per Vaccine_Schedule_Master — locked to prevent accidental changes. If the recipient was already vaccinated elsewhere, unlock/correct it manually.');
-          // Locked, same as the history-found path (efApplyDoseHistory)
-          // below — a confidently-derived starting dose shouldn't be any
-          // easier to accidentally overwrite than a history-derived one.
-          efLockDoseField();
-        } else {
-          efUnlockDoseField();
-        }
-        efUpdateFollowUpPreview();
-      })
-      .withFailureHandler(function () {
-        if (gen !== efGen) return;
-        efSetDoseLookupIndicator(false);
-        efSetBrandScheduleIndicator(false);
-        efUnlockDoseField();
-        efUpdateFollowUpPreview();
-      })
-      .getStartingDoseInfo(type, brand, schedule);
+    efResolveStartingDose(type, brand, schedule, gen);
   });
 
   function efClearBrands() { document.getElementById('vaccineBrand').innerHTML = '<option value="">-- Select Brand --</option>'; efClearSchedules(); efClearLots(); }
@@ -1822,8 +1894,35 @@
     efSetBrandScheduleIndicator(false);
   }
 
-  function efPopulateDoseOptions(selectedValue, gen) {
+  // unlockAfter: whether successfully populating the options list should
+  // also UNLOCK the field (default true — the page-init/no-chain case,
+  // where nothing else is waiting to decide the lock state). Pass FALSE
+  // when this is fired as one step of a larger lookup chain (e.g.
+  // efCheckDoseHistory's "no history" branch, which deliberately calls
+  // efLockDoseField() right after kicking this off, because Brand +
+  // Schedule haven't been resolved yet and the field must stay locked
+  // until they are).
+  //
+  // BUG FIX (confirmed): this used to call efUnlockDoseField()
+  // unconditionally in every case. That raced against the rest of the
+  // chain (efLoadBrandsPlain -> efLoadSchedulesPlain -> the 'schedule'
+  // change handler -> getStartingDoseInfo), which is what actually
+  // determines the real prefilled dose and the field's true final locked
+  // state. Whichever response landed LAST silently won. On a warm
+  // connection the responses happen to arrive in dispatch order, so this
+  // never showed up — but on the first google.script.run round trip of a
+  // session (classic Apps Script cold-start latency), this call's
+  // response could land after the synchronous lock but before the real
+  // chain finished, unlocking a field that was supposed to stay locked
+  // and waiting — resulting in Intended Dose Number sitting locked-and-
+  // empty (or unlocked-and-empty) instead of getting the derived starting
+  // dose. "Clear the form and try again" just meant the connection was
+  // warm by then, so the race window closed — the underlying bug was
+  // still there. Fixed by never letting this call unlock on its own when
+  // it's part of that chain; see call sites below.
+  function efPopulateDoseOptions(selectedValue, gen, unlockAfter) {
     if (gen === undefined) gen = efGen; // called directly at page init/reset, not as part of a tracked lookup chain
+    if (unlockAfter === undefined) unlockAfter = true;
     var select = document.getElementById('intendedDose');
     google.script.run
       .withSuccessHandler(function (doses) {
@@ -1835,7 +1934,7 @@
           select.appendChild(opt);
         });
         if (selectedValue) select.value = selectedValue;
-        efUnlockDoseField();
+        if (unlockAfter) efUnlockDoseField();
       })
       .withFailureHandler(function (err) { if (gen === efGen) efShowMessage('ERROR loading dose numbers: ' + err.message, 'error'); })
       .getDoseNumbers();
@@ -1884,7 +1983,13 @@
           // a suggestion for this different vaccine that has no history.
           efSetDoseLookupIndicator(true, '🔄 No prior history — loading Brand & Schedule options…');
           efLoadBrandsPlain(vaccineType, null, null, gen);
-          efPopulateDoseOptions(null, gen);
+          // unlockAfter=false: this is just refreshing the options LIST,
+          // not deciding the lock state — see efPopulateDoseOptions's own
+          // comment for the race this fixes. efLoadBrandsPlain (and, after
+          // that, efLoadSchedulesPlain / the 'schedule' change handler) is
+          // what actually unlocks the field once there's genuinely nothing
+          // left to wait for.
+          efPopulateDoseOptions(null, gen, false);
           // Stays LOCKED, not unlocked, here — efLoadBrandsPlain is async
           // and hasn't resolved Brand/Schedule yet, and until it does
           // there's nothing for Intended Dose to be derived from either.
@@ -1907,7 +2012,7 @@
         efSetDoseLookupIndicator(false);
         efShowMessage('ERROR checking vaccination history: ' + err.message, 'error');
         efLoadBrandsPlain(vaccineType, null, null, gen);
-        efPopulateDoseOptions(null, gen);
+        efPopulateDoseOptions(null, gen, false); // unlockAfter=false — the explicit efUnlockDoseField() below is this path's real, deliberate unlock
         efUnlockDoseField();
       })
       .getRecipientVaccineHistory(recipientId, vaccineType);
@@ -1967,17 +2072,35 @@
     // when the sheet actually says something unambiguous.
     if (!hist.lastRoute) efApplyVaccineTypeRouteHint(type, gen);
 
-    var doseSelect = document.getElementById('intendedDose');
     var basePrefix = 'History found: last dose was "' + efEsc(hist.lastDoseNumber) + '" on ' + efEsc(hist.lastVaccinationDate) + ' (' + efEsc(hist.lastBrand) + ' / ' + efEsc(hist.lastSchedule) + '). ';
 
+    // BUG FIX (confirmed): this used to set doseSelect.value directly,
+    // assuming #intendedDose's real <option> list (Dose 1, Dose 2, ...)
+    // was already populated by the page-init efPopulateDoseOptions() call
+    // (line ~886). That call is fired once, independently, at page load,
+    // and is NOT synchronized with this history lookup — if this chain
+    // (getRecipientVaccineHistory) resolves before that init call does
+    // (very possible on the first google.script.run round trip of a
+    // session, when several init calls are competing for a cold Apps
+    // Script container), #intendedDose still only has the placeholder
+    // "-- Select Dose --" option. Setting .value to a dose that isn't
+    // one of its actual <option>s is a silent DOM no-op — the value
+    // stays blank — and efLockDoseField() ran right after anyway, which
+    // is exactly the "locked but empty" bug. Routing through
+    // efPopulateDoseOptions (same helper the "no history" branch already
+    // uses) guarantees the real option list is loaded FIRST and the value
+    // is only set once it's actually there — no reliance on which of two
+    // unrelated async calls happens to finish first.
     if (hist.nextIntendedDose) {
-      doseSelect.value = hist.nextIntendedDose;
+      efPopulateDoseOptions(hist.nextIntendedDose, gen, false);
       efLockDoseField();
       efShowHint(basePrefix + 'Pre-filled next dose "' + efEsc(hist.nextIntendedDose) + '" — locked to prevent accidental changes.');
     } else if (hist.seriesComplete) {
+      efPopulateDoseOptions(null, gen, false);
       efUnlockDoseField();
       efShowHint(basePrefix + 'This series appears COMPLETE — no further scheduled dose. Series status: ' + efEsc(hist.seriesStatus) + '. If a new dose is genuinely needed (e.g. a booster outside the standard series), select it manually below.');
     } else {
+      efPopulateDoseOptions(null, gen, false);
       efUnlockDoseField();
       efShowHint(basePrefix + 'Sheet guidance for what comes next: "' + efEsc(hist.nextDoseAdvisory || 'not specified') + '". Series status: ' + efEsc(hist.seriesStatus) + '. Please select the correct next dose manually.');
     }
@@ -2005,6 +2128,8 @@
     var intendedDose = document.getElementById('intendedDose').value;
     var schedule = document.getElementById('schedule').value;
     var vaccinationDate = document.getElementById('vaccinationDate').value;
+    var disposition = document.getElementById('doseDisposition').value;
+    var reviewDate = document.getElementById('reviewDate').value;
 
     if (!vaccineType || !intendedDose || !schedule) {
       efSetFollowUpFields('(fill in dose assessment & schedule above)');
@@ -2032,7 +2157,14 @@
         document.getElementById('followUpPreviewIndicator').classList.remove('show');
         efSetFollowUpFields('—');
       })
-      .getFollowUpPreview(vaccineType, '', schedule, intendedDose, vaccinationDate);
+      // disposition + reviewDate: BUG FIX — this preview used to ignore
+      // Dose Disposition entirely, so a No-show/Declined/Deferred/
+      // Contraindicated entry showed "next dose advances" here even
+      // though saveVaccinationRecord (once fixed — see Code.gs) correctly
+      // keeps the SAME dose as next-due when it wasn't actually given.
+      // Passing both through keeps this preview matching what actually
+      // gets saved.
+      .getFollowUpPreview(vaccineType, '', schedule, intendedDose, vaccinationDate, disposition, reviewDate);
   }
 
   function efSetFollowUpFields(text) {
@@ -2045,6 +2177,14 @@
   document.getElementById('intendedDose').addEventListener('change', efUpdateFollowUpPreview);
   document.getElementById('schedule').addEventListener('change', efUpdateFollowUpPreview);
   document.getElementById('vaccinationDate').addEventListener('change', efUpdateFollowUpPreview);
+  // BUG FIX: Dose Disposition and Review/Reschedule Date now both feed
+  // getFollowUpPreview's disposition-aware override (see Code.gs) — this
+  // preview didn't used to refresh when either changed, so switching
+  // Disposition to No-show/Declined/etc. (or editing the Review Date)
+  // left the OLD, disposition-blind preview on screen until some other
+  // field happened to change too.
+  document.getElementById('doseDisposition').addEventListener('change', efUpdateFollowUpPreview);
+  document.getElementById('reviewDate').addEventListener('change', efUpdateFollowUpPreview);
 
   function efEsc(v) {
     if (v === null || v === undefined) return '';

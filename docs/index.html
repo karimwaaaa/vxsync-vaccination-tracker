@@ -122,28 +122,46 @@
   #entryPanel .ef-typo-notice { display: none; margin: -4px 0 12px; padding: 8px 12px; border-radius: 6px; font-size: 0.85em; }
   #entryPanel .ef-typo-info { background: #eaf6f4; color: #155e56; }
 
-  /* ---- Lot inventory picker (illustrative — see docs FAQ for what's simplified) ---- */
+  /* ---- Lot inventory picker ----
+     Kept in step with the real app's two-column card grid + search bar
+     (EntryForm.html) as of 2026-10. A lot the real system marks "Used Up"
+     is never sent to the client at all — it just isn't in the list — so
+     this demo doesn't render a greyed-out card for one either; it
+     disappears from the grid instead, same as the real picker. */
   #entryPanel .vx-lot-wrap { margin: 0 0 14px 214px; }
   #entryPanel .vx-lot-hint { font-size: 0.82em; color: var(--vx-muted); margin-bottom: 8px; }
-  #entryPanel .vx-lot-grid { display: flex; flex-wrap: wrap; gap: 10px; }
-  #entryPanel .vx-lot-card {
-    border: 2px solid var(--vx-border); border-radius: 8px; padding: 10px 14px;
-    min-width: 170px; cursor: pointer; background: #fff; transition: 0.12s;
+  #entryPanel .vx-lot-search {
+    width: 100%; box-sizing: border-box; padding: 8px 12px; margin: 0 0 8px;
+    border: 1px solid #dbe1ea; border-radius: 6px; font-size: 14px;
   }
-  #entryPanel .vx-lot-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-  #entryPanel .vx-lot-card.ready { border-color: var(--vx-green); }
-  #entryPanel .vx-lot-card.hold { border-color: #f39c12; }
-  #entryPanel .vx-lot-card.usedup { border-color: var(--vx-border); background: #f4f6f9; opacity: 0.55; cursor: not-allowed; }
-  #entryPanel .vx-lot-card.selected { box-shadow: 0 0 0 3px rgba(31,182,168,0.35); }
+  #entryPanel .vx-lot-search:focus { border-color: var(--vx-teal); outline: none; }
+  #entryPanel .vx-lot-grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+    max-height: 420px; overflow-y: auto;
+    padding: 8px; border: 1px solid var(--vx-border); border-radius: 8px; background: #fafcfd;
+  }
+  @media (max-width: 560px) {
+    #entryPanel .vx-lot-grid { grid-template-columns: 1fr; }
+  }
+  #entryPanel .vx-lot-card {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    border: 2px solid var(--vx-border); border-radius: 8px; padding: 10px 14px;
+    cursor: pointer; background: #fff; transition: 0.12s; width: 100%; box-sizing: border-box;
+  }
+  #entryPanel .vx-lot-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-color: var(--vx-teal); }
+  #entryPanel .vx-lot-card.ready { border-left: 6px solid var(--vx-green); }
+  #entryPanel .vx-lot-card.hold { border-left: 6px solid #f39c12; }
+  #entryPanel .vx-lot-card.selected { border-color: var(--vx-teal); background: #eafaf7; box-shadow: 0 0 0 2px rgba(31,182,168,0.18); }
+  #entryPanel .vx-lot-card .vx-lot-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   #entryPanel .vx-lot-card .vx-lot-num { font-weight: 700; color: var(--vx-navy); font-size: 0.95em; }
   #entryPanel .vx-lot-card .vx-lot-exp { font-size: 0.8em; color: var(--vx-muted); margin-top: 2px; }
-  #entryPanel .vx-lot-badges { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
-  #entryPanel .vx-lot-badge { font-size: 0.72em; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+  #entryPanel .vx-lot-badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex-shrink: 0; }
+  #entryPanel .vx-lot-badge { font-size: 0.72em; font-weight: 700; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
   #entryPanel .vx-lot-badge.site { background: #dbe8ff; color: #1c4e80; }
+  #entryPanel .vx-lot-badge.region { background: #e2e8f0; color: #4a5568; }
   #entryPanel .vx-lot-badge.ready { background: #d5f5e3; color: #1a7a4a; }
   #entryPanel .vx-lot-badge.hold { background: #fdebd0; color: #9c6400; }
-  #entryPanel .vx-lot-badge.usedup { background: #e2e8f0; color: #6b7a90; text-decoration: line-through; }
-  #entryPanel .vx-lot-empty { font-size: 0.85em; color: var(--vx-muted); font-style: italic; }
+  #entryPanel .vx-lot-empty { font-size: 0.85em; color: var(--vx-muted); font-style: italic; padding: 6px 2px; }
   .global-search-inline { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 160px; }
   .global-search-inline .search-icon { font-size: 0.8em; color: #7f8c8d; }
   .global-search-inline input {
@@ -221,6 +239,27 @@
   #dashboardPanel .filter-status button { background: none; border: none; color: #155e56; text-decoration: underline; cursor: pointer; font-size: 0.85em; }
   #dashboardPanel .db-msg { padding: 10px 14px; border-radius: 6px; background: #eaf6f4; color: #155e56; display: none; margin-bottom: 15px; font-size: 0.88em; }
   #dashboardPanel .db-msg.show { display: block; }
+  /* ---- Dashboard sub-tabs: Program Monitoring vs. Inventory (recreated
+     from Dashboard.html's real vx-tabs / vx-view split) ---- */
+  #dashboardPanel .vx-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--vx-border); margin-bottom: 4px; }
+  #dashboardPanel .vx-tab-btn {
+    border: none; background: transparent; padding: 9px 16px; font-weight: 600;
+    color: var(--vx-muted); cursor: pointer; border-bottom: 3px solid transparent; font-size: 0.92em;
+  }
+  #dashboardPanel .vx-tab-btn.active { color: var(--vx-navy); border-bottom-color: var(--vx-teal); }
+  #dashboardPanel .vx-view { display: none; }
+  #dashboardPanel .vx-view.active { display: block; }
+  #dashboardPanel .inv-toolbar { display: flex; justify-content: flex-start; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0; flex: 1; }
+  #dashboardPanel .inv-toolbar label { font-size: 0.85em; font-weight: 600; color: #34495e; margin-right: 6px; }
+  #dashboardPanel .inv-toolbar select { padding: 7px 10px; border: 1px solid #dbe1ea; border-radius: 6px; font-size: 0.88em; }
+  #dashboardPanel .inv-flag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin: 1px 3px 1px 0; white-space: nowrap; }
+  #dashboardPanel .inv-flag--warn { background: #fdebd0; color: #935e38; }
+  #dashboardPanel td.inv-negative { color: #922b21; font-weight: 700; }
+  #dashboardPanel .inv-note { font-size: 0.85em; color: var(--vx-muted); margin: -4px 0 12px; }
+  #dashboardPanel tr.inv-row-flagged td { background: #fff8f2; }
+  #dashboardPanel .stat-card.inv-flagged { border-top-color: #e74c3c; } #dashboardPanel .stat-card.inv-flagged .number { color: #e74c3c; }
+  #dashboardPanel .stat-card.inv-remaining { border-top-color: var(--vx-green); } #dashboardPanel .stat-card.inv-remaining .number { color: var(--vx-green); }
+
   .chart-wrap { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
   .bar-chart { flex: 1 1 320px; min-width: 260px; }
   .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -477,6 +516,7 @@
             <label>Lot Inventory</label>
             <div class="vx-lot-wrap">
               <div class="vx-lot-hint" id="lotPickerHint">Select a Vaccine Type and Brand above to see available lots.</div>
+              <input type="text" id="lotSearchBox" class="vx-lot-search" placeholder="🔍 Search lot number…" style="display:none;" autocomplete="off">
               <div class="vx-lot-grid" id="lotPickerGrid"></div>
             </div>
           </div>
@@ -538,6 +578,12 @@
        ============================================================ -->
   <div id="dashboardPanel" class="tab-panel">
     <div class="db-container">
+      <div class="vx-tabs">
+        <button type="button" class="vx-tab-btn active" id="vxTabBtnMonitoring" onclick="vxSwitchSubTab('monitoring')">&#128202; Program Monitoring</button>
+        <button type="button" class="vx-tab-btn" id="vxTabBtnInventory" onclick="vxSwitchSubTab('inventory')">&#128138; Inventory</button>
+      </div>
+
+      <div class="vx-view active" id="vxViewMonitoring">
       <div id="db-message" class="db-msg">Sample data refreshed. (Demo mode &mdash; numbers do not change on refresh.)</div>
       <div class="db-toolbar">
         <button class="filter-btn" id="filterByBtn" onclick="vxToggleFilterMenu()">&#128269; Filter By</button>
@@ -601,6 +647,55 @@
             <thead><tr><th>Department</th><th>Recipients with Due</th><th>Total Due Doses</th><th>Due &le;30 Days</th><th>Due 31&ndash;90 Days</th><th>Future Doses</th></tr></thead>
             <tbody id="deptTable"></tbody>
           </table>
+        </div>
+      </div>
+      </div>
+
+      <!-- ============================================================
+           INVENTORY TAB — illustrative recreation of Dashboard.html's
+           real Lot Inventory Balance Report. Received/Administered/
+           Remaining there are computed live from two real sheets; here
+           they're a small fixed illustrative dataset (DEMO_INVENTORY),
+           same spirit as DEMO_LOTS above. See docs FAQ for what's
+           simplified.
+           ============================================================ -->
+      <div class="vx-view" id="vxViewInventory">
+        <div class="db-toolbar">
+          <div class="inv-toolbar">
+            <label for="invSiteSelect">Site of Vaccination</label>
+            <select id="invSiteSelect" onchange="vxRenderInventoryTable()">
+              <option value="">All Sites</option>
+            </select>
+          </div>
+          <button class="refresh-btn" onclick="vxRenderInventoryTable()">&#128260; Refresh</button>
+          <button class="export-btn" onclick="vxOpenPdfModal()">&#128196; Export PDF</button>
+        </div>
+        <h1 style="color:var(--vx-navy); font-size:1.3em; margin:8px 0 0;">Lot Inventory Balance Report</h1>
+        <p class="inv-note">
+          Received = physical units logged for this lot. Administered = doses recorded against it. Remaining =
+          Received &minus; Administered. Hold is informational only and doesn't subtract from Remaining. (Demo
+          numbers are fixed, illustrative values — the real report recomputes this fresh from two live sheets every
+          time it loads.)
+        </p>
+        <div id="invStats" class="stats-grid"></div>
+        <div class="section">
+          <h2>&#128138; Lot Balance &mdash; <span id="invSectionSite">All Sites</span></h2>
+          <p style="margin:-4px 0 12px; font-size:0.85em; color:var(--vx-muted);">
+            A row with a Flags entry is worth a closer look before reconciliation sign-off &mdash; often expected for
+            historical/backfilled records logged before live lot tracking existed for that lot, not necessarily an
+            error.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Site</th><th>Lot Number</th><th>Vaccine Type</th><th>Brand</th><th>Expiry</th>
+                  <th>Received</th><th>Administered</th><th>Remaining</th><th>Hold</th><th>Flags</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryTable"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -817,56 +912,94 @@
   };
 
   var efSelectedLot = null; // { brand, index }
+  var efLotSearchTerm = ''; // current #lotSearchBox text, lowercased
 
-  function efRenderLotPicker() {
-    var brand = document.getElementById('vaccineBrand').value;
-    var hint = document.getElementById('lotPickerHint');
-    var grid = document.getElementById('lotPickerGrid');
-    grid.innerHTML = '';
+  // Full reset — brand/site/context changed, so any previously selected
+  // lot and search text no longer apply. Mirrors EntryForm.html resetting
+  // its own search box on every fresh Type/Brand fetch.
+  function efResetLotPicker() {
     efSelectedLot = null;
     document.getElementById('lotNumber').value = '';
     document.getElementById('expiryDate').value = '';
+    document.getElementById('lotSearchBox').value = '';
+    efLotSearchTerm = '';
+    efRenderLotPicker();
+  }
+
+  // Just redraws the grid from current state (brand, selection, search
+  // filter) — does NOT touch the selected lot or clear the search box, so
+  // typing in the search field can't accidentally lose what's picked.
+  function efRenderLotPicker() {
+    var brand = document.getElementById('vaccineBrand').value;
+    var hint = document.getElementById('lotPickerHint');
+    var searchBox = document.getElementById('lotSearchBox');
+    var grid = document.getElementById('lotPickerGrid');
+    grid.innerHTML = '';
 
     if (!brand) {
+      searchBox.style.display = 'none';
       hint.style.display = 'block';
       hint.textContent = 'Select a Vaccine Type and Brand above to see available lots.';
       return;
     }
-    var lots = DEMO_LOTS[brand] || [];
+    // A lot the real system has marked "Used Up" is never sent to the
+    // client at all (see isLotSelectable_ in Code.gs) — it just isn't in
+    // the list anymore, not shown as a disabled card. Filtered the same
+    // way here so the demo doesn't invent a state the real picker never
+    // shows.
+    var allLots = (DEMO_LOTS[brand] || [])
+      .map(function (l, i) { return { lot: l, i: i }; })
+      .filter(function (entry) { return entry.lot.status !== 'Used Up'; });
+
+    if (!allLots.length) {
+      searchBox.style.display = 'none';
+      hint.style.display = 'block';
+      hint.textContent = 'No available Lot Numbers logged for this Vaccine Type/Brand in this demo dataset.';
+      return;
+    }
+    // Only worth showing once there's more than one card to search through.
+    searchBox.style.display = allLots.length > 1 ? '' : 'none';
+
+    efLotSearchTerm = searchBox.value.trim().toLowerCase();
+    var lots = !efLotSearchTerm ? allLots : allLots.filter(function (entry) {
+      return entry.lot.lot.toLowerCase().indexOf(efLotSearchTerm) !== -1;
+    });
     if (!lots.length) {
       hint.style.display = 'block';
-      hint.textContent = 'No lots on file for ' + brand + ' in this demo dataset.';
+      hint.textContent = 'No Lot Number matches "' + searchBox.value + '". Clear the search to see all available lots.';
       return;
     }
     hint.style.display = 'none';
+
     var mySite = document.getElementById('location').value;
-    // Ready lots first, own-site lots before other-site lots, Used Up last —
-    // same priority order the real picker sorts by.
-    var ordered = lots.map(function (l, i) { return { lot: l, i: i }; }).sort(function (a, b) {
-      var rank = function (l) { return l.status === 'Used Up' ? 2 : (l.site === mySite ? 0 : 1); };
+    // Own-site lots before other-site lots — same priority the real
+    // picker sorts by (exact site match ahead of same-region fallback).
+    var ordered = lots.slice().sort(function (a, b) {
+      var rank = function (l) { return l.site === mySite ? 0 : 1; };
       return rank(a.lot) - rank(b.lot);
     });
     ordered.forEach(function (entry) {
       var l = entry.lot;
-      var statusClass = l.status === 'Ready' ? 'ready' : (l.status === 'Hold' ? 'hold' : 'usedup');
+      var statusClass = l.status === 'Ready' ? 'ready' : 'hold';
+      var isSelected = efSelectedLot && efSelectedLot.brand === brand && efSelectedLot.index === entry.i;
       var card = document.createElement('div');
-      card.className = 'vx-lot-card ' + statusClass;
+      card.className = 'vx-lot-card ' + statusClass + (isSelected ? ' selected' : '');
       card.dataset.index = entry.i;
-      var badges = '<span class="vx-lot-badge ' + statusClass + '">' + l.status + '</span>';
-      if (l.status !== 'Used Up') {
-        badges += l.site === mySite
-          ? '<span class="vx-lot-badge site">Your site</span>'
-          : '<span class="vx-lot-badge site" style="background:#e2e8f0;color:#4a5568;">' + l.site.replace('Meridian ', '') + '</span>';
-      }
-      card.innerHTML = '<div class="vx-lot-num">' + l.lot + '</div>' +
-        '<div class="vx-lot-exp">Exp ' + l.expiry + '</div>' +
+      var badges = l.status === 'Ready'
+        ? '<span class="vx-lot-badge ready">✓ Ready</span>'
+        : '<span class="vx-lot-badge hold">⚠ 1 on hold</span>';
+      badges += l.site === mySite
+        ? '<span class="vx-lot-badge site">Your site</span>'
+        : '<span class="vx-lot-badge region">Same region</span>';
+      card.innerHTML = '<div class="vx-lot-main"><div class="vx-lot-num">' + l.lot + '</div>' +
+        '<div class="vx-lot-exp">Exp. ' + l.expiry + '</div></div>' +
         '<div class="vx-lot-badges">' + badges + '</div>';
-      if (l.status !== 'Used Up') {
-        card.onclick = function () { efSelectLot(brand, entry.i); };
-      }
+      card.onclick = function () { efSelectLot(brand, entry.i); };
       grid.appendChild(card);
     });
   }
+
+  document.getElementById('lotSearchBox').addEventListener('input', efRenderLotPicker);
 
   function efSelectLot(brand, index) {
     var lot = (DEMO_LOTS[brand] || [])[index];
@@ -874,10 +1007,7 @@
     efSelectedLot = { brand: brand, index: index };
     document.getElementById('lotNumber').value = lot.lot;
     document.getElementById('expiryDate').value = lot.expiry;
-    var grid = document.getElementById('lotPickerGrid');
-    Array.prototype.forEach.call(grid.children, function (card) {
-      card.classList.toggle('selected', Number(card.dataset.index) === index);
-    });
+    efRenderLotPicker();
   }
 
   var efGen = 0;
@@ -930,7 +1060,7 @@
   function efSiteChanged() {
     document.getElementById('locationEcho').value = document.getElementById('location').value;
     efRenderRecipientOptions();
-    efRenderLotPicker();
+    efResetLotPicker();
   }
 
   function efRenderRecipientOptions() {
@@ -1120,7 +1250,7 @@
     document.getElementById('schedule').innerHTML = '<option value="">-- Select Brand First --</option>';
     document.getElementById('intendedDose').innerHTML = '<option value="">-- Select Vaccine First --</option>';
     efUpdateFollowUp();
-    efRenderLotPicker();
+    efResetLotPicker();
   }
 
   function efBrandChanged() {
@@ -1135,7 +1265,7 @@
       scheduleSelect.appendChild(opt);
     });
     scheduleSelect.onchange = efScheduleChanged;
-    efRenderLotPicker();
+    efResetLotPicker();
   }
 
   function efScheduleChanged() {
@@ -1210,11 +1340,15 @@
       if (claimedLot) {
         var lotRecord = DEMO_LOTS[claimedLot.brand][claimedLot.index];
         // Mirrors the real app: an Administered dose claims the lot and
-        // flips it to Used Up (removed from future pickers); anything else
+        // flips it to Used Up, which removes it from the picker entirely
+        // (not greyed out — just gone, same as the real system never
+        // sending a Used Up lot to the client at all). Anything else
         // flags it Hold instead, staying visible but tagged.
         lotRecord.status = disposition === 'Administered' ? 'Used Up' : 'Hold';
-        note = ' Lot ' + lotRecord.lot + ' is now marked ' + lotRecord.status + '.';
-        efRenderLotPicker();
+        note = lotRecord.status === 'Used Up'
+          ? ' Lot ' + lotRecord.lot + ' is now Used Up and won’t appear in the picker again.'
+          : ' Lot ' + lotRecord.lot + ' is now marked Hold.';
+        efResetLotPicker();
       }
       efShowMessage('✓ Record saved (demo only — nothing was actually written anywhere).' + note, 'success');
     }, 900);
@@ -1250,6 +1384,25 @@
   }
 
   // ============================================================
+  // DASHBOARD SUB-TABS — Program Monitoring vs. Inventory. Mirrors
+  // Dashboard.html: each sub-tab loads its own data lazily, the first
+  // time it's switched to, rather than both firing up front.
+  // ============================================================
+  var vxInventoryLoaded = false;
+  function vxSwitchSubTab(tab) {
+    var isMonitoring = tab === 'monitoring';
+    document.getElementById('vxViewMonitoring').classList.toggle('active', isMonitoring);
+    document.getElementById('vxViewInventory').classList.toggle('active', !isMonitoring);
+    document.getElementById('vxTabBtnMonitoring').classList.toggle('active', isMonitoring);
+    document.getElementById('vxTabBtnInventory').classList.toggle('active', !isMonitoring);
+    if (!isMonitoring && !vxInventoryLoaded) {
+      vxInventoryLoaded = true;
+      vxPopulateInventorySites();
+      vxRenderInventoryTable();
+    }
+  }
+
+  // ============================================================
   // DASHBOARD — fake stats, buckets, tables, simple SVG donut
   // ============================================================
   var DEMO_STATS = {
@@ -1281,6 +1434,75 @@
     { dept: 'Administrative', withDue: 5, totalDue: 7, due30: 1, due90: 2, future: 4 },
     { dept: 'Field Sales', withDue: 3, totalDue: 4, due30: 0, due90: 1, future: 3 }
   ];
+
+  // ============================================================
+  // INVENTORY TAB — illustrative only (see docs FAQ). The real report
+  // computes Received/Administered/Remaining live from two sheets on
+  // every load; these are small fixed numbers just to show the shape of
+  // the table and its flags.
+  // ============================================================
+  var DEMO_INVENTORY = [
+    { site: 'Meridian Clinic - Riverside', lot: 'LOT-2026-0102', type: 'Influenza', brand: 'Fluarix Quadrivalent', expiry: '2027-01-31', received: 40, administered: 23, hold: 0, flags: [] },
+    { site: 'Meridian Mobile Unit - Fairhaven', lot: 'LOT-2026-0103', type: 'Influenza', brand: 'Fluarix Quadrivalent', expiry: '2027-01-31', received: 25, administered: 25, hold: 0, flags: [] },
+    { site: 'Meridian Clinic - Riverside', lot: 'LOT-2025-0912', type: 'Hepatitis B', brand: 'Recombivax HB', expiry: '2026-11-30', received: 15, administered: 9, hold: 1, flags: [] },
+    { site: 'Meridian Clinic - Riverside', lot: 'LOT-2026-0501', type: 'COVID-19', brand: 'Comirnaty', expiry: '2027-04-30', received: 60, administered: 41, hold: 0, flags: [] },
+    { site: 'Meridian Clinic - Lakeview', lot: 'LOT-2026-0502', type: 'COVID-19', brand: 'Comirnaty', expiry: '2027-04-30', received: 30, administered: 12, hold: 0, flags: [] },
+    { site: 'Meridian Clinic - Riverside', lot: 'LOT-2025-0488', type: 'COVID-19', brand: 'Comirnaty', expiry: '2026-11-01', received: 20, administered: 24, hold: 0, flags: ['Administered exceeds Received'] },
+    { site: 'Meridian Clinic - Brookstone', lot: 'LOT-2026-0311', type: 'MMR (Measles, Mumps, Rubella)', brand: 'M-M-R II', expiry: '2027-08-31', received: 18, administered: 6, hold: 0, flags: [] },
+    { site: 'Meridian Clinic - Riverside', lot: 'HISTORICAL-PRE2026', type: 'Tetanus-Diphtheria-Pertussis (Tdap)', brand: 'Adacel', expiry: '—', received: 0, administered: 4, hold: 0, flags: ['No matching lot on file — likely pre-dates live lot tracking'] }
+  ];
+
+  function vxPopulateInventorySites() {
+    var select = document.getElementById('invSiteSelect');
+    var sites = [];
+    DEMO_INVENTORY.forEach(function (r) { if (sites.indexOf(r.site) === -1) sites.push(r.site); });
+    sites.sort();
+    select.innerHTML = '<option value="">All Sites</option>' +
+      sites.map(function (s) { return '<option value="' + vxEsc(s) + '">' + vxEsc(s) + '</option>'; }).join('');
+  }
+
+  function vxRenderInventoryTable() {
+    var site = document.getElementById('invSiteSelect').value;
+    document.getElementById('invSectionSite').textContent = site || 'All Sites';
+    var rows = site ? DEMO_INVENTORY.filter(function (r) { return r.site === site; }) : DEMO_INVENTORY;
+
+    var totalReceived = 0, totalAdministered = 0, totalRemaining = 0, flaggedCount = 0;
+    rows.forEach(function (r) {
+      totalReceived += r.received;
+      totalAdministered += r.administered;
+      totalRemaining += (r.received - r.administered);
+      if (r.flags.length) flaggedCount++;
+    });
+    document.getElementById('invStats').innerHTML =
+      vxStatCard(totalReceived, 'Total Received') +
+      vxStatCard(totalAdministered, 'Total Administered') +
+      vxStatCard(totalRemaining, 'Total Remaining', 'inv-remaining') +
+      vxStatCard(flaggedCount, 'Flagged Rows', flaggedCount ? 'inv-flagged' : '');
+
+    var tbody = document.getElementById('inventoryTable');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="10">No lots on file for this site in this demo dataset.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(function (r) {
+      var remaining = r.received - r.administered;
+      var flagsHtml = r.flags.length
+        ? r.flags.map(function (f) { return '<span class="inv-flag inv-flag--warn" title="' + vxEsc(f) + '">&#9888; Review</span>'; }).join('')
+        : '—';
+      return '<tr' + (r.flags.length ? ' class="inv-row-flagged"' : '') + '>' +
+        '<td>' + vxEsc(r.site) + '</td>' +
+        '<td>' + vxEsc(r.lot) + '</td>' +
+        '<td>' + vxEsc(r.type) + '</td>' +
+        '<td>' + vxEsc(r.brand) + '</td>' +
+        '<td>' + vxEsc(r.expiry) + '</td>' +
+        '<td>' + r.received + '</td>' +
+        '<td>' + r.administered + '</td>' +
+        '<td' + (remaining < 0 ? ' class="inv-negative"' : '') + '>' + remaining + '</td>' +
+        '<td>' + r.hold + '</td>' +
+        '<td>' + flagsHtml + '</td>' +
+      '</tr>';
+    }).join('');
+  }
 
   function vxStatCard(value, label, cls) {
     return '<div class="stat-card ' + (cls || '') + '"><div class="number">' + value + '</div><div class="label">' + label + '</div></div>';
@@ -1477,11 +1699,11 @@
     },
     {
       q: 'Why is Lot Number a set of cards instead of a text box now?',
-      a: 'Once you pick a Vaccine Type and Brand, the real system shows every lot currently on hand for that brand as a card — Lot Number and Expiry Date are pre-filled by clicking one, not typed by hand. Green = Ready to use, amber = on Hold, and a lot marked Used Up is greyed out and can\'t be selected. A blue "Your site" badge means that lot is stocked right where you are; otherwise it shows which site has it. (This demo shows a small illustrative set of lots, not the real system\'s full live inventory.)'
+      a: 'Once you pick a Vaccine Type and Brand, the real system shows every lot currently on hand for that brand as a card — Lot Number and Expiry Date are pre-filled by clicking one, not typed by hand. Green = Ready to use, amber = on Hold. A lot marked Used Up isn’t shown as a disabled card — it’s simply not in the list at all, the same way the real system never sends an already-used-up lot to the page. A blue "Your site" badge means that lot is stocked right where you are; a grey "Same region" badge means it’s nearby stock, not your exact site. Once there’s more than one lot to choose from, a search box appears above the cards to filter by Lot Number. (This demo shows a small illustrative set of lots, not the real system’s full live inventory.)'
     },
     {
       q: 'A lot I picked disappeared after I saved the record.',
-      a: 'Saving an Administered dose against a lot claims it and flips it to Used Up, so it drops out of the picker for the next entry — that\'s expected, not an error. Saving any other disposition (Deferred, Declined, No-show, Contraindicated) instead flags that lot Hold: it stays visible and selectable, just tagged, since the vial wasn\'t actually used.'
+      a: 'Saving an Administered dose against a lot claims it and flips it to Used Up, which removes it from the picker entirely — that\'s expected, not an error. Saving any other disposition (Deferred, Declined, No-show, Contraindicated) instead flags that lot Hold: it stays visible and selectable, just tagged, since the vial wasn\'t actually used.'
     },
     {
       q: 'I see a warning that a vaccine should be given SC, not IM (or vice versa).',
@@ -1498,6 +1720,10 @@
     {
       q: 'How do I know when the system is looking something up in the background?',
       a: 'Whenever a background lookup could change or pre-fill a field for you — checking this recipient\'s history, loading brand/schedule options, working out a starting dose, or checking the site spelling — a small "🔄 …" note appears just above that part of the form while it\'s running, and disappears once it\'s done (or turns into an error/hint message if something needs your attention). If you don\'t see one, the system isn\'t currently searching for that field.'
+    },
+    {
+      q: 'What does the Inventory tab on the Program Dashboard show?',
+      a: 'A per-lot balance: how many units were Received, how many have been Administered, and what\'s Remaining (Received minus Administered). Hold is informational only — it doesn\'t subtract from Remaining. The real report recomputes all of this fresh from two live sheets every time it loads, nothing is a stored counter. A row with a Flags badge is worth a second look before reconciliation sign-off, but isn\'t necessarily an error — a flag on a historical/backfilled record logged before live lot tracking existed for that lot is expected, not a mistake. (This demo\'s numbers are a small fixed illustrative set, not a live computation.)'
     }
   ];
 
@@ -1520,7 +1746,15 @@
       list.appendChild(item);
     });
   }
-  vxRenderFaqs();
+  // Deferred, not called directly: #vxFaqList sits further down in the
+  // document than this <script> block, so calling this immediately threw
+  // "Cannot set properties of null" on every page load — which, being an
+  // uncaught error in top-level script execution, silently stopped every
+  // statement after it in this same block from ever running too (the help
+  // panel's FAQ list stayed empty AND vxHelpTicketType below never got
+  // initialized). DOMContentLoaded guarantees the whole document, this div
+  // included, has been parsed first.
+  document.addEventListener('DOMContentLoaded', vxRenderFaqs);
 
   function vxToggleHelpPanel() {
     document.getElementById('vxHelpPanel').classList.toggle('open');

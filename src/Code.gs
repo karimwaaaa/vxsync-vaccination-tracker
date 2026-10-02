@@ -74,9 +74,12 @@ const CONFIG = {
   // getVaccinatorEmailSet_/getUserRole below). Add an email here only for
   // someone who needs encoder access but isn't in Vaccinators_Master for
   // some reason.
-  nurseEmails: ['nurse1@company.com', 'nurse2@company.com', 'maria_katarina_tria@dlsu.edu.ph', 'kat.tria10@gmail.com'],
-  adminEmails: ['manny.tria@mypqh.com', 'eat-jr@mypqh.com', 'vitria@mypqh.com', 'mroces@mypqh.com', 'matria@mypqh.com', 'wellness@mypqh.com', 'arlene.alcon@mypqh.com', 'danica.tria@mypqh.com', 'maria_katarina_tria@dlsu.edu.ph', 'kat.tria10@gmail.com', 'eat@mypqh.com'],
-  clientEmails: ['client@company.com'],
+  // PORTFOLIO COPY: these are placeholder values, not real client data.
+  // Replace with the real client's actual emails per deployment — see the
+  // comment above for what this list is actually for.
+  nurseEmails: ['nurse1@example.com', 'nurse2@example.com'],
+  adminEmails: ['admin1@example.com', 'admin2@example.com'],
+  clientEmails: ['client@example.com'],
 
   // --- Optional starting site suggestion per nurse. ---
   // NOTE: as of the "type it, remember it" change to Site of Vaccination,
@@ -91,10 +94,11 @@ const CONFIG = {
   // ("MTC Whiteplains" / "MTC WHITEPLAINS" / "MTC Quezon City" / "MTC QC" /
   // "PQH Head Office" / "PQH Main Office QC" / "Main Office" — all typed by
   // hand before this interface existed).
+  // PORTFOLIO COPY: placeholder example, matching the placeholder emails
+  // above — not real client site data.
   encoderSiteMap: {
-    'nurse1@company.com': 'PQH Head Office',
-    'nurse2@company.com': 'MTC Quezon City',
-    'maria_katarina_tria@dlsu.edu.ph': 'MTC Whiteplains'
+    'nurse1@example.com': 'Main Clinic',
+    'nurse2@example.com': 'Downtown Office'
   },
 
   // --- Hub SSO integration ---
@@ -573,12 +577,41 @@ function isYes_(value) {
 // Logger/manual-Run show the correct return value (manual Run never goes
 // through the RPC bridge, so it never surfaces this). Fix: never hand a
 // Date object across google.script.run — convert to a plain string first.
+// Returns an ISO "yyyy-MM-dd" string whenever the input can be understood
+// as a date at all. This matters more than it looks: every caller of this
+// function (getInventoryLots -> EntryForm.html's Expiry Date field) feeds
+// the result straight into an <input type="date">.value — and browsers
+// silently REJECT (leave blank, no error, no console warning) any string
+// that isn't exactly that ISO shape. A Lot_Expiry_Master Expiry Date cell
+// typed by hand as "29/08/2027" instead of picked from a real date picker
+// reads back from getValues() as a plain string, not a Date object, and
+// used to be passed through here completely unconverted — which is why
+// selecting a lot card could silently leave Expiry Date blank for some
+// lots and not others, with zero indication of why. Fixed by also
+// recognizing the other format real Lot_Expiry_Master data in this session
+// has actually been typed in (d/m/yyyy or dd/mm/yyyy — unambiguous against
+// real test values like "29/08/2027", where 29 can't be a month).
 function formatDateForClient_(value) {
   if (!value) return '';
   if (Object.prototype.toString.call(value) === '[object Date]') {
     return Utilities.formatDate(value, Session.getScriptTimeZone() || 'Asia/Manila', 'yyyy-MM-dd');
   }
-  return String(value);
+  const s = String(value).trim();
+  // Already ISO (optionally with a leftover time component from an old
+  // datetime-local value) — pass the date part through unchanged.
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  // dd/mm/yyyy or d/m/yyyy.
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const day = ('0' + m[1]).slice(-2);
+    const month = ('0' + m[2]).slice(-2);
+    return m[3] + '-' + month + '-' + day;
+  }
+  // Genuinely unparseable (free text, "unknown", etc.) — return as typed.
+  // The lot card still displays it for a human to read; only the
+  // <input type="date"> auto-fill can't use it, same as before this fix.
+  return s;
 }
 
 // --- DIAGNOSTIC: run this manually from the Apps Script editor (Run menu)
@@ -995,6 +1028,277 @@ function claimLotInventoryUnit_(vaccineType, vaccineBrand, lotNumber, siteText, 
     'This vaccine lot ("' + lotNumber + '") is no longer available — it was likely just used in another submission. ' +
     'Please refresh the Vaccine Type / Brand / Lot Number selection and pick again.'
   );
+}
+
+// ============================================================
+//  LOT INVENTORY BALANCE REPORT (per-site / per-lot Received vs
+//  Administered vs Remaining) — feature requested by the chairman, for
+//  the VxSync Admin Dashboard's new "Inventory" tab.
+//
+//  Formula-based per explicit client instruction (not a decrementing
+//  counter): every number here is recomputed fresh from source rows each
+//  time the report is opened, so a failed save, a later edit, or a
+//  deleted row can never leave a stale/drifted count sitting around.
+//
+//  Received     = COUNT of Lot_Expiry_Master rows for this (site, lot),
+//                 regardless of Availability — this already IS "how many
+//                 physical units were loaded", per this sheet's actual
+//                 data model (one row per physical unit — see the LOT
+//                 block comment far above). No new column needed.
+//  Hold         = COUNT of those rows currently sitting at "Hold" —
+//                 informational only, per client instruction: does NOT
+//                 subtract from Remaining.
+//  Administered = COUNT of Vaccination_Tracker rows for this (site, lot)
+//                 whose Disposition is 'Administered' — sourced from the
+//                 Tracker (NOT from counting "Used Up" rows in
+//                 Lot_Expiry_Master) specifically so a BACKFILLED dose
+//                 counts exactly the same as a live one, per client
+//                 instruction.
+//  Remaining    = Received - Administered.
+//
+//  Grouping key: normalized Site Name (extractSiteNameFromVaccinationSite_
+//  — same de-duplication already used everywhere else in this file for
+//  "MTC WP - QC" vs "MTC Whiteplains - Metro Manila" style near-
+//  duplicates) plus the literal Lot Number. Vaccine Type / Brand / Expiry
+//  are taken by majority vote across the group's own rows
+//  (inventoryPickMode_) rather than assumed consistent, because nothing
+//  stops logistics from mistyping the Brand on one row of a lot and not
+//  another — see the metadataMismatch flag below.
+//
+//  FLAGS — a group can carry more than one at once:
+//   - metadataMismatch: this lot's own Lot_Expiry_Master rows (within the
+//     same site) don't agree on Vaccine Type / Brand / Expiry Date.
+//   - noLotRowsButAdministered: doses were logged as Administered against
+//     this (site, lot) in Vaccination_Tracker, but there are ZERO
+//     Lot_Expiry_Master rows for it at all (logistics never loaded this
+//     lot, or the Lot Number was typed slightly differently on one side).
+//     Received/Remaining are meaningless here — this flag says why.
+//
+//     THIS IS THE ONLY SURFACE that catches a mistyped Lot Number on a
+//     backfilled row. trkClaimLotInventory_ (VxSync_Tracker_Backfill.gs)
+//     deliberately leaves a Backfill row's Lot Number cell untouched — no
+//     note, no toast — whenever it finds no matching Lot_Expiry_Master
+//     row at all (result.notFound in claimLotInventoryForBoundSheet_,
+//     MasterTemplate_Code.gs), because that's the expected shape of a
+//     genuine external-provider or pre-live-tracking historical dose. The
+//     tradeoff: a plain typo of a REAL lot number produces the identical
+//     signature and is silenced right along with it. Both end up here,
+//     as their own flagged (site, lot) row, indistinguishable by the
+//     flag alone — telling them apart means eyeballing whether the lot
+//     text looks like a near-miss of something in Lot_Expiry_Master
+//     versus something that plainly belongs to a different system. If
+//     that manual check ever becomes too slow to be worth it, the
+//     cheapest next step is a fuzzy-match suggestion here (e.g. Levenshtein
+//     distance against known Lot Numbers for the same Vaccine Type/Brand)
+//     rather than trying to make the Backfill claimer itself smarter.
+//   - negativeRemaining: Administered > Received. Looks impossible for a
+//     single-sheet count, but Administered here is sourced from a
+//     DIFFERENT sheet (Vaccination_Tracker) than Received (Lot_Expiry_
+//     Master), and the two are only kept in sync going forward by the
+//     claim functions — a backfilled dose logged before the Backfill
+//     double-claim fix shipped (see claimLotInventoryForBoundSheet_ in
+//     MasterTemplate_Code.gs) could have been recorded in the Tracker
+//     with no matching Lot_Expiry_Master row ever flipped to Used Up.
+//     Surfaced rather than silently clamped to zero — this is a real
+//     reconciliation signal, not a bug in this report.
+//   - claimMismatch: Administered (Tracker) disagrees with the COUNT of
+//     "Used Up" rows in Lot_Expiry_Master for this same (site, lot) — a
+//     direct signal that some Administered doses never got their unit
+//     flipped to Used Up. Historical mismatch predating the Backfill fix
+//     in this same pass, or from the legacy Sheets-native entry path, is
+//     expected and not itself something to chase down.
+// ============================================================
+
+// Majority-vote helper: given a list of raw values from a group of rows
+// that are all SUPPOSED to agree (Vaccine Type / Brand / Expiry for one
+// Lot Number), returns the most common non-blank value plus how many
+// DISTINCT non-blank values were actually seen — distinctCount > 1 is
+// what getInventoryBalanceReport uses to raise metadataMismatch, rather
+// than silently picking a winner and hiding the disagreement.
+function inventoryPickMode_(values) {
+  const counts = {};
+  values.forEach(function (v) {
+    const key = String(v || '').trim();
+    if (!key) return;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  let best = '', bestCount = 0;
+  Object.keys(counts).forEach(function (k) {
+    if (counts[k] > bestCount) { best = k; bestCount = counts[k]; }
+  });
+  return { value: best, distinctCount: Object.keys(counts).length };
+}
+
+// Backs the Inventory tab's site filter dropdown. Unions site names from
+// BOTH Lot_Expiry_Master's Site column and Vaccination_Tracker's
+// Vaccination Location column — a site with rows in only one of the two
+// sheets (e.g. logistics pre-loaded stock for a new site before any doses
+// were ever logged there, or vice versa) still needs to show up so a
+// supervisor can filter to it. Defaults to "All Sites" client-side.
+function getInventorySiteOptions() {
+  assertCanViewReport_();
+  try {
+    const ss = getSheet_();
+    const sites = new Set();
+
+    const lotSheet = ss.getSheetByName(LOT_SHEET_NAME);
+    if (lotSheet) {
+      const lastRow = lotSheet.getLastRow();
+      if (lastRow >= LOT.FIRST_ROW) {
+        const data = lotSheet.getRange(LOT.FIRST_ROW, LOT.SITE, lastRow - LOT.FIRST_ROW + 1, 1).getValues();
+        data.forEach(function (r) {
+          const name = extractSiteNameFromVaccinationSite_(r[0]);
+          if (name) sites.add(name);
+        });
+      }
+    }
+
+    const trackerSheet = ss.getSheetByName('Vaccination_Tracker');
+    if (trackerSheet) {
+      const lastRow = trackerSheet.getLastRow();
+      if (lastRow >= 2) {
+        const data = trackerSheet.getRange(2, TRACKER_COL.VACCINATION_LOCATION + 1, lastRow - 1, 1).getValues();
+        data.forEach(function (row) {
+          const name = extractSiteNameFromVaccinationSite_(row[0]);
+          if (name) sites.add(name);
+        });
+      }
+    }
+
+    const list = Array.from(sites);
+    list.sort();
+    return list;
+  } catch (e) {
+    console.error('getInventorySiteOptions error:', e);
+    throw e;
+  }
+}
+
+// Client-facing: the Inventory tab's main report. siteName blank/null
+// means "All Sites" — every (site, lot) group across the whole workbook.
+// See the block comment above for the full field/flag design.
+function getInventoryBalanceReport(siteName) {
+  assertCanViewReport_();
+  try {
+    const ss = getSheet_();
+    const filterSite = siteName ? String(siteName).trim() : '';
+    const groups = {}; // key -> accumulator, see below
+
+    function keyFor(site, lot) { return site + '\u0001' + lot; }
+    function ensureGroup_(site, lot) {
+      const k = keyFor(site, lot);
+      if (!groups[k]) {
+        groups[k] = {
+          siteName: site, lot: lot,
+          types: [], brands: [], expiries: [],
+          received: 0, hold: 0, usedUpCount: 0, administered: 0
+        };
+      }
+      return groups[k];
+    }
+
+    // --- Lot_Expiry_Master: Received / Hold / UsedUpCount, plus the
+    // metadata (Type/Brand/Expiry) each group's own rows report.
+    const lotSheet = ss.getSheetByName(LOT_SHEET_NAME);
+    if (lotSheet) {
+      const lastRow = lotSheet.getLastRow();
+      if (lastRow >= LOT.FIRST_ROW) {
+        const data = lotSheet.getRange(LOT.FIRST_ROW, 1, lastRow - LOT.FIRST_ROW + 1, LOT.AVAILABILITY).getValues();
+        data.forEach(function (r) {
+          const lot = String(r[LOT.LOT_NUMBER - 1] || '').trim();
+          if (!lot) return; // incomplete/placeholder row — not real stock yet
+          const site = extractSiteNameFromVaccinationSite_(r[LOT.SITE - 1]);
+          if (!site) return;
+          if (filterSite && site !== filterSite) return;
+          const g = ensureGroup_(site, lot);
+          g.received++;
+          g.types.push(r[LOT.VACCINE_TYPE - 1]);
+          g.brands.push(r[LOT.VACCINE_BRAND - 1]);
+          g.expiries.push(formatDateForClient_(r[LOT.EXPIRY_DATE - 1]));
+          const avail = normalizeLotAvailability_(r[LOT.AVAILABILITY - 1]).toLowerCase();
+          if (avail === 'hold') g.hold++;
+          if (avail === 'used up') g.usedUpCount++;
+        });
+      }
+    }
+
+    // --- Vaccination_Tracker: Administered counts, sourced independently
+    // so a backfilled dose counts exactly like a live one (per client
+    // instruction) — even for a (site, lot) with zero Lot_Expiry_Master
+    // rows at all (see noLotRowsButAdministered flag below).
+    const trackerSheet = ss.getSheetByName('Vaccination_Tracker');
+    if (trackerSheet) {
+      const lastRow = trackerSheet.getLastRow();
+      if (lastRow >= 2) {
+        const width = Math.max(TRACKER_COL.LOT_NUMBER, TRACKER_COL.VACCINATION_LOCATION, TRACKER_COL.DISPOSITION) + 1;
+        const data = trackerSheet.getRange(2, 1, lastRow - 1, width).getValues();
+        data.forEach(function (row) {
+          if (row[TRACKER_COL.DISPOSITION] !== 'Administered') return;
+          const lot = String(row[TRACKER_COL.LOT_NUMBER] || '').trim();
+          if (!lot) return;
+          const site = extractSiteNameFromVaccinationSite_(row[TRACKER_COL.VACCINATION_LOCATION]);
+          if (!site) return;
+          if (filterSite && site !== filterSite) return;
+          ensureGroup_(site, lot).administered++;
+        });
+      }
+    }
+
+    const rows = Object.keys(groups).map(function (k) {
+      const g = groups[k];
+      const typeMode = inventoryPickMode_(g.types);
+      const brandMode = inventoryPickMode_(g.brands);
+      const expiryMode = inventoryPickMode_(g.expiries);
+      const flags = [];
+      if (g.received > 0 && (typeMode.distinctCount > 1 || brandMode.distinctCount > 1 || expiryMode.distinctCount > 1)) {
+        flags.push('metadataMismatch');
+      }
+      if (g.received === 0 && g.administered > 0) {
+        flags.push('noLotRowsButAdministered');
+      }
+      const remaining = g.received - g.administered;
+      if (remaining < 0) flags.push('negativeRemaining');
+      if (g.administered !== g.usedUpCount) flags.push('claimMismatch');
+      return {
+        siteName: g.siteName,
+        lot: g.lot,
+        vaccineType: typeMode.value,
+        vaccineBrand: brandMode.value,
+        expiryDate: expiryMode.value,
+        received: g.received,
+        administered: g.administered,
+        remaining: remaining,
+        hold: g.hold,
+        usedUpCount: g.usedUpCount,
+        flags: flags
+      };
+    });
+
+    rows.sort(function (a, b) {
+      if (a.siteName !== b.siteName) return a.siteName < b.siteName ? -1 : 1;
+      return a.lot < b.lot ? -1 : (a.lot > b.lot ? 1 : 0);
+    });
+
+    // Summary totals — computed here, once, from the same `rows` the
+    // table itself renders (not a second independent pass over the raw
+    // sheets), so the Dashboard's stat tiles can never disagree with the
+    // table underneath them. flaggedLots counts LOTS with at least one
+    // flag, not total flags (a lot with 2 flags still counts once).
+    const summary = rows.reduce(function (acc, r) {
+      acc.totalLots++;
+      acc.totalReceived += r.received;
+      acc.totalAdministered += r.administered;
+      acc.totalRemaining += r.remaining;
+      acc.totalHold += r.hold;
+      if (r.flags.length > 0) acc.flaggedLots++;
+      return acc;
+    }, { totalLots: 0, totalReceived: 0, totalAdministered: 0, totalRemaining: 0, totalHold: 0, flaggedLots: 0 });
+
+    return { site: filterSite || 'All Sites', rows: rows, summary: summary };
+  } catch (e) {
+    console.error('getInventoryBalanceReport error:', e);
+    throw e;
+  }
 }
 
 function getSchedules(vaccineType, brand) {
@@ -2026,7 +2330,7 @@ function getStartingDoseInfo(vaccineType, brand, scheduleDisplay) {
 //  preview can be shown. If the caller has a brand/schedule pair instead
 //  of a code, pass scheduleCode='' and scheduleDisplay — either is enough
 //  to resolve the row.
-function previewFollowUpSchedule_(vaccineType, scheduleCode, scheduleDisplay, intendedDoseText, vaccinationDateStr) {
+function previewFollowUpSchedule_(vaccineType, scheduleCode, scheduleDisplay, intendedDoseText, vaccinationDateStr, disposition, reviewDateStr) {
   const currentNum = deriveCurrentDoseNumber_(intendedDoseText);
   const sheet = getSheet_().getSheetByName('Vaccine_Schedule_Master');
   const data = sheet.getDataRange().getValues();
@@ -2090,6 +2394,33 @@ function previewFollowUpSchedule_(vaccineType, scheduleCode, scheduleDisplay, in
     else seriesStatus = 'In Progress';
   }
 
+  // ------------------------------------------------------------
+  // BUG FIX (confirmed) — same override saveVaccinationRecord applies at
+  // save time, mirrored here so the LIVE PREVIEW the encoder sees while
+  // filling the form never disagrees with what actually gets saved.
+  // Everything above this point mirrors Vaccination_Entry's own formula,
+  // which is keyed ONLY on Intended Dose Number and has no notion of Dose
+  // Disposition — correct for 'Administered' (the series genuinely
+  // advanced), wrong for anything else (Deferred/Declined/No-show/
+  // Contraindicated): the dose was never actually given, so what's really
+  // due next is the SAME dose just attempted, not the one after it (a
+  // Hep B Dose 1 logged "No-show" must still show "Dose 1" as next due,
+  // not "Dose 2").
+  if (disposition && disposition !== 'Administered') {
+    const overrideRecommendedDate = reviewDateStr ? new Date(reviewDateStr) : null;
+    let overrideReminderDate = '';
+    if (overrideRecommendedDate && !isNaN(overrideRecommendedDate.getTime())) {
+      overrideReminderDate = new Date(overrideRecommendedDate.getTime());
+      overrideReminderDate.setDate(overrideReminderDate.getDate() - 7);
+    }
+    return {
+      nextDose: intendedDoseText || '',
+      recommendedDate: formatDateForClient_(overrideRecommendedDate && !isNaN(overrideRecommendedDate.getTime()) ? overrideRecommendedDate : ''),
+      reminderDate: formatDateForClient_(overrideReminderDate),
+      seriesStatus: 'In Progress'
+    };
+  }
+
   return {
     nextDose: nextDose,
     recommendedDate: formatDateForClient_(recommendedDate),
@@ -2102,13 +2433,16 @@ function previewFollowUpSchedule_(vaccineType, scheduleCode, scheduleDisplay, in
 // vaccinationDate come straight from the live form state; scheduleCode is
 // optional (resolved from vaccineType+brand+scheduleDisplay via
 // lookupScheduleCode_ if the caller has it, otherwise pass '').
-function getFollowUpPreview(vaccineType, scheduleCode, scheduleDisplay, intendedDose, vaccinationDate) {
+// disposition/reviewDate (both optional, added for the disposition-aware
+// override above) let the preview match what saveVaccinationRecord will
+// actually persist when the dose isn't 'Administered'.
+function getFollowUpPreview(vaccineType, scheduleCode, scheduleDisplay, intendedDose, vaccinationDate, disposition, reviewDate) {
   assertCanEncode_();
   try {
     if (!vaccineType || !intendedDose) {
       return { nextDose: '', recommendedDate: '', reminderDate: '', seriesStatus: '' };
     }
-    return previewFollowUpSchedule_(vaccineType, scheduleCode || '', scheduleDisplay || '', intendedDose, vaccinationDate || '');
+    return previewFollowUpSchedule_(vaccineType, scheduleCode || '', scheduleDisplay || '', intendedDose, vaccinationDate || '', disposition || '', reviewDate || '');
   } catch (e) {
     console.error('getFollowUpPreview error:', e);
     throw e;
@@ -2470,6 +2804,58 @@ function saveVaccinationRecord(record) {
     const reminderDate = entrySheet.getRange(ENTRY.REMINDER_DATE, 2).getValue();
     const seriesStatus = entrySheet.getRange(ENTRY.SERIES_STATUS, 2).getValue();
 
+    // ------------------------------------------------------------
+    // BUG FIX (confirmed): Vaccination_Entry's Next Dose / Recommended
+    // Date / Series Status formulas (read back into nextDose/
+    // recommendedDate/reminderDate/seriesStatus above) are keyed ONLY on
+    // Intended Dose Number — they always compute "whatever comes after
+    // this dose," with zero awareness of Dose Disposition. That's correct
+    // when the dose was actually 'Administered' (the series genuinely
+    // advanced), but wrong for every other disposition: Deferred /
+    // Declined / No-show / Contraindicated all mean the dose was NEVER
+    // ACTUALLY GIVEN, so what's really due next is the SAME dose that was
+    // just attempted, not the one after it. Concretely: a Hep B Dose 1
+    // logged as "No-show" was computing Next Dose = "Dose 2" (as if it had
+    // been given) instead of staying "Dose 1" so the recipient gets
+    // rescheduled for the dose they actually missed — and the same
+    // mis-advance applied to every dose number in every series, not just
+    // this one example.
+    //
+    // Overridden HERE, once, right after the raw sheet read — before
+    // statusPair, the Tracker row, and the response object all consume
+    // these values — so every downstream consumer (the appended
+    // Vaccination_Tracker row itself, the dashboard's Action Required /
+    // Upcoming Doses tables, which read these columns straight off that
+    // row) stays consistent. getRecipientVaccineHistory's own "what's the
+    // recipient's last dose" lookup already separately filters to
+    // Disposition === 'Administered' only, so it was never affected by
+    // this — this fix is specifically for the value STORED on the
+    // non-Administered row itself.
+    let effectiveNextDose = nextDose;
+    let effectiveRecommendedDate = recommendedDate;
+    let effectiveReminderDate = reminderDate;
+    let effectiveSeriesStatus = seriesStatus;
+    if (record.doseDisposition !== 'Administered') {
+      effectiveNextDose = record.intendedDose || '';
+      // No dose was actually given, so there's no vaccination date to
+      // count a schedule interval FROM — the only date that means
+      // anything here is whatever Review/Reschedule Date the encoder
+      // entered (already written to ENTRY.REVIEW_DATE above). Reminder
+      // Date mirrors it with the same 7-days-before offset the
+      // Administered path already uses (see recommendedDate/reminderDate
+      // above), so the reminder engine still has something to key off.
+      // Series Status is always "In Progress" — the series hasn't
+      // completed, it hasn't even successfully started this dose yet.
+      effectiveRecommendedDate = record.reviewDate ? parseDateOnlyLocal_(record.reviewDate) : '';
+      effectiveReminderDate = '';
+      if (effectiveRecommendedDate) {
+        const rd = new Date(effectiveRecommendedDate.getTime());
+        rd.setDate(rd.getDate() - 7);
+        effectiveReminderDate = rd;
+      }
+      effectiveSeriesStatus = 'In Progress';
+    }
+
     if (record.recipientId && computedRecipientId && String(computedRecipientId) !== String(record.recipientId)) {
       // The name-based lookup on the sheet resolved to a different Recipient ID
       // than the one the nurse actually selected in the dropdown — almost
@@ -2495,7 +2881,7 @@ function saveVaccinationRecord(record) {
     //    in any sample row — CONFIRM these two cases with PQ HealthShield
     //    before go-live; the labels below are a reasonable placeholder, not
     //    a verified spec.
-    const statusPair = deriveScheduleAndReminderStatus_(record.doseDisposition, nextDose, recommendedDate);
+    const statusPair = deriveScheduleAndReminderStatus_(record.doseDisposition, effectiveNextDose, effectiveRecommendedDate);
 
     // 5) Build the Vaccination_Tracker row (36 columns, A:AJ) and append.
     const nextId = getNextTrackerId_(trackerSheet);
@@ -2555,14 +2941,14 @@ function saveVaccinationRecord(record) {
       record.vaccinator || '',                  // Z  Vaccinator
       computedVaccinatorLicense || '',          // AA Vaccinator License Number
       scheduleCode || '',                       // AB Schedule Code
-      nextDose || '',                           // AC Next Dose
-      recommendedDate || '',                    // AD Recommended Next Dose Date
+      effectiveNextDose || '',                  // AC Next Dose — see the disposition-aware override above
+      effectiveRecommendedDate || '',            // AD Recommended Next Dose Date
       '',                                        // AE Scheduled Appointment Date (set later, not at intake)
-      reminderDate || '',                       // AF Reminder Date
+      effectiveReminderDate || '',              // AF Reminder Date
       statusPair.scheduleStatus,                // AG Schedule Status
       statusPair.reminderStatus,                // AH Reminder Status
       '',                                        // AI Reminder Sent Date
-      seriesStatus || '',                       // AJ Series Status
+      effectiveSeriesStatus || '',               // AJ Series Status
       'No',                                      // AK Schedule Override
       record.remarks || ''                      // AL Remarks
     ];
@@ -2597,13 +2983,15 @@ function saveVaccinationRecord(record) {
       success: true,
       message: 'Record saved successfully.',
       recordId: nextId,
-      nextDose: nextDose,
+      nextDose: effectiveNextDose,
       // Same Date-across-the-bridge precaution as getRecipients()/
       // getDashboardData() — recommendedDate here comes straight off a
-      // formula cell and can be a real Date object.
-      recommendedDate: formatDateForClient_(recommendedDate),
-      reminderDate: formatDateForClient_(reminderDate),
-      seriesStatus: seriesStatus
+      // formula cell (or, for a non-Administered disposition, the
+      // Review/Reschedule Date override above) and can be a real Date
+      // object.
+      recommendedDate: formatDateForClient_(effectiveRecommendedDate),
+      reminderDate: formatDateForClient_(effectiveReminderDate),
+      seriesStatus: effectiveSeriesStatus
     };
   } catch (e) {
     console.error('saveVaccinationRecord error:', e);
@@ -2731,9 +3119,11 @@ function addRecipient(fields) {
 
     // Columns, by index — full map now confirmed (client-supplied for
     // J/O/P/R): A id, B employee/client ID (optional), C last, D first,
-    // E middle, F dob, G sex, H category, I company, J department/unit ID,
-    // K department/unit (name), L assigned site, M email, N mobile,
-    // O enrollment source, P date added, Q active, R remarks, S full name.
+    // E middle, F dob, G sex, H category, I company, J department/unit ID
+    // (column kept in place but deliberately never populated — see note
+    // on row[9] below), K department/unit (name), L assigned site, M
+    // email, N mobile, O enrollment source, P date added, Q active,
+    // R remarks, S full name.
     const row = [];
     row[0] = newId;
     row[1] = fields.employeeId || ''; // Employee / Client ID — optional, per client instruction
@@ -2744,7 +3134,7 @@ function addRecipient(fields) {
     row[6] = fields.sex || '';
     row[7] = fields.category || '';
     row[8] = fields.company || '';
-    row[9] = fields.deptId || ''; // Department / Unit ID
+    row[9] = ''; // Department / Unit ID — CHANGED per client instruction: felt redundant with Department / Unit (Name) and confused encoders, so the "Add New Recipient" form no longer asks for it. Column left in place (never physically removed — every later column, including Active at index 16, is read by fixed position throughout this file, so deleting a column here would silently shift and misread all of them). Deliberately never populated going forward, same pattern already used for Vaccination_Tracker's own now-unused copy of this field.
     row[10] = fields.dept || '';
     row[11] = fields.assignedSite || '';
     row[12] = fields.email || '';
